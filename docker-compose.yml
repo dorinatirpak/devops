@@ -1,0 +1,55 @@
+# Neon Gothic Amőba – 3-tier stack.
+# Own compose project name ("amoba") so it never collides with ~/hazi-projekt.
+name: amoba
+
+services:
+  db:
+    image: postgres:16-alpine            # multi-arch: arm64 on the VPS, amd64 in CI
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-amoba}
+      POSTGRES_USER: ${POSTGRES_USER:-amoba}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [data]                     # NOT published to the host
+
+  backend:
+    build: ./backend
+    image: amoba-backend:latest
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      APP_VERSION: ${APP_VERSION:-dev}
+      DATABASE_URL: postgres://${POSTGRES_USER:-amoba}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-amoba}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # localhost only: handy for `curl` on the server; public traffic goes via NPM -> frontend.
+      - "127.0.0.1:${BACKEND_PORT:-4010}:4000"
+    networks: [data, web]
+
+  frontend:
+    build: ./frontend
+    image: amoba-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8090}:80"     # Nginx Proxy Manager forwards amoba.devops-ora.tech here
+    networks: [web]
+
+networks:
+  web:                                   # frontend <-> backend
+  data:                                  # backend <-> db (frontend can't reach the DB)
+    internal: true
+
+volumes:
+  pgdata:
