@@ -45,6 +45,23 @@ body {
   }
 }
 
+@keyframes status-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75%, 100% { content: '...'; }
+}
+
+@keyframes radar {
+  from { transform: scale(0.3); opacity: 1; }
+  to { transform: scale(1.6); opacity: 0; }
+}
+
 @keyframes appear {
   from { transform: scale(0.3); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
@@ -162,7 +179,24 @@ body {
 
 /* ---------- Turn indicator ---------- */
 .turn { display: flex; flex-direction: column; gap: 10px; }
-.turn__players { display: flex; flex-direction: column; gap: 6px; }
+.turn__players { --gap: 6px; position: relative; display: flex; flex-direction: column; gap: var(--gap); }
+/* One highlight that slides between the players: a hand-over, not a blink. */
+.turn__glider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc((100% - var(--gap)) / 2);
+  border: 1px solid var(--c, var(--line));
+  border-radius: 6px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--c, transparent) 35%, transparent),
+    inset 0 0 14px color-mix(in srgb, var(--c, transparent) 12%, transparent);
+  pointer-events: none;
+  transition: transform 0.5s cubic-bezier(0.65, 0, 0.35, 1), border-color 0.5s, box-shadow 0.5s, opacity 0.3s;
+}
+.turn__players--X .turn__glider { --c: var(--x); transform: translateY(0); }
+.turn__players--O .turn__glider { --c: var(--o); transform: translateY(calc(100% + var(--gap))); }
+.turn__players--none .turn__glider { opacity: 0; }
 .chip {
   display: flex;
   align-items: center;
@@ -170,21 +204,33 @@ body {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  opacity: 0.55;
-  transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
+  opacity: 0.5;
+  transition: opacity 0.5s ease, border-color 0.5s ease;
 }
 .chip--X { --c: var(--x); }
 .chip--O { --c: var(--o); }
 .chip__mark { color: var(--c); font-weight: 700; text-shadow: 0 0 6px var(--c); width: 1ch; }
-.chip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip--active, .chip--won { opacity: 1; border-color: var(--c); box-shadow: 0 0 8px color-mix(in srgb, var(--c) 35%, transparent); }
+.chip__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip__tag { color: var(--muted); font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase; }
+.chip--active, .chip--won { opacity: 1; border-color: transparent; }
 .status { margin: 0; min-height: 1.4em; font-size: 1.05rem; letter-spacing: 0.06em; color: var(--text); }
+.status__text { display: inline-block; animation: status-in 0.4s ease-out; }
 .status--done { color: #fff; text-shadow: 0 0 6px color-mix(in srgb, var(--x) 60%, transparent); }
+/* "Neon AI is thinking..." with dots that fill in one by one */
+.dots::after { content: ''; display: inline-block; width: 1.5em; text-align: left; animation: dots 1.2s steps(4, end) infinite; }
+.controls__hint { align-self: center; text-align: center; font-size: 0.85rem; }
 .controls__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 /* ---------- Home ---------- */
 .home { display: flex; flex-direction: column; align-items: center; gap: 28px; }
 .hero { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; max-width: 560px; }
+.hero__field { width: 100%; max-width: 420px; }
+.hero__field input { text-align: center; font-size: 1.05rem; }
+.hero__field .field__label { text-align: center; color: var(--muted); }
+.hero__field .field__error { text-align: center; }
+.hero__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+.hero__actions .btn--lg { padding: 14px 12px; }
+@media (max-width: 520px) { .hero__actions { grid-template-columns: 1fr; } }
 .rules { width: 100%; color: var(--muted); }
 .rules summary { cursor: pointer; text-align: center; letter-spacing: 0.15em; }
 .rules summary:hover { color: var(--text); }
@@ -200,27 +246,28 @@ body {
 .recent { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
 .recent li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 
-/* ---------- Setup ---------- */
-.setup { display: flex; flex-direction: column; gap: 16px; max-width: 460px; margin: 0 auto; }
-.mode-picker { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.mode-picker legend { margin-bottom: 8px; color: var(--muted); }
-.mode-card {
+/* ---------- Matchmaking ---------- */
+.searching { display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 460px; margin: 0 auto; text-align: center; }
+.searching p { margin: 0; }
+.searching .setup__actions { width: 100%; }
+.setup__actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.radar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid var(--o);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--o) 40%, transparent);
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.mode-card input { position: absolute; opacity: 0; pointer-events: none; }
-.mode-card:focus-within { outline: 1px solid var(--o); }
-.mode-card--active { border-color: var(--accent); box-shadow: 0 0 12px rgba(176, 38, 255, 0.35); }
-.mode-card__label { color: var(--text); }
-.mode-card__hint { color: var(--muted); font-size: 0.8rem; }
-.setup__actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.radar::before, .radar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  animation: radar 2.4s ease-out infinite;
+}
+.radar::after { animation-delay: 1.2s; }
 
 /* ---------- Board ---------- */
 .board {
@@ -249,6 +296,14 @@ body {
 }
 .cell:enabled:hover { border-color: var(--accent); box-shadow: inset 0 0 8px var(--accent); }
 .cell:disabled { cursor: default; }
+.board { transition: box-shadow 0.5s ease, border-color 0.5s ease; }
+/* Opponent's turn: the board dims slightly and stops reacting, so it is obvious you have to wait. */
+.board--waiting { border-color: var(--line); box-shadow: 0 0 10px rgba(176, 38, 255, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.9); }
+.board--waiting .cell:not(.cell--X):not(.cell--O) { cursor: wait; }
+.cell { transition: background-color 0.5s ease, border-color 0.3s ease; }
+.board--waiting .cell:not(.cell--X):not(.cell--O) { background: #10041a; }
+/* The most recent stone gets a thin ring: you can see where the AI or your opponent just played. */
+.cell--last { border-color: color-mix(in srgb, currentColor 70%, transparent); box-shadow: inset 0 0 6px color-mix(in srgb, currentColor 45%, transparent); }
 .cell--X { color: var(--x); text-shadow: 0 0 6px var(--x), 0 0 12px var(--x); animation: appear 0.15s ease-out; }
 .cell--O { color: var(--o); text-shadow: 0 0 6px var(--o), 0 0 12px var(--o); animation: appear 0.15s ease-out; }
 .cell--win {
@@ -268,5 +323,6 @@ body {
 .footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 0.75rem; letter-spacing: 0.2em; }
 
 @media (prefers-reduced-motion: reduce) {
-  .title, .cell--win, .cell--X, .cell--O { animation: none; }
+  .title, .cell--win, .cell--X, .cell--O, .status__text, .radar::before, .radar::after { animation: none; }
+  .turn__glider, .chip, .board, .cell { transition: none; }
 }

@@ -1,6 +1,6 @@
 # Neon Requiem
 
-Five-in-a-row (Gomoku, 15×15) with **Player vs Player** and **Player vs AI** modes, mandatory player names, match history and a leaderboard. Internally the stack is still called `amoba` (compose project, folder, images).
+Five-in-a-row (Gomoku, 15×15). Enter your name once, then either **Find Opponent** (online matchmaking against another real player on their own device) or **Play vs AI**. Match history and a leaderboard are stored in PostgreSQL. Internally the stack is still called `amoba` (compose project, folder, images).
 University DevOps project: the focus is the **testing → CI/CD → Docker deployment** lifecycle.
 
 | Tier | Tech | Container | Host port |
@@ -27,12 +27,19 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
  ┌──────────────────────── docker compose project "amoba" ─────────────────────────┐
  │                                                                                  │
  │  frontend (nginx :80) ── /api/* ──►  backend (Express :4000) ──►  db (Postgres)  │
- │     static React files      "web" network       "data" network (internal)       │
+ │     static React files  ── /api/ws ─►  + WebSocket lobby      "data" network      │
+ │                          "web" network                        (internal)         │
  └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 * **Container-to-container traffic** uses Docker's embedded DNS: the frontend's nginx proxies
   `/api/` to `http://backend:4000`, the backend connects to `postgres://…@db:5432/amoba`.
+* **Online matchmaking** runs over one WebSocket (`/api/ws`). The backend's `Lobby`
+  (`backend/src/lobby.js`) queues players, pairs the first two waiting players, assigns X/O at random
+  and is the **only** place where online moves are validated and wins are decided. The browser just
+  sends `join` / `move` and renders what the server broadcasts. A name can hold only one seat, so
+  nobody can queue twice and play themselves. Leaving a running game counts as a loss.
+  Results are written to Postgres by the server; `POST /api/matches` only accepts AI games.
 * **Two networks** enforce the tiers: `web` (frontend ↔ backend) and `data` (backend ↔ db,
   `internal: true`). The frontend physically cannot reach the database, and the DB has no host port.
 * **One public entry point:** NPM only needs a single proxy host (→ 8090). Because the React app
@@ -54,7 +61,8 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
    * Scheme `http`, Forward Hostname/IP: **the same host/IP you used for the hazi-projekt proxy host**
      (NPM runs in its own container, so it's the host's IP / Docker gateway, not `localhost`),
      Forward Port: **`8090`**
-   * Enable *Block Common Exploits* and *Websockets Support*
+   * Enable *Block Common Exploits* and **Websockets Support** (required: online matchmaking uses a
+     WebSocket; without it players stay on "Connecting…")
    * SSL tab: *Request a new Let's Encrypt certificate*, *Force SSL*, *HTTP/2*.
 
 No firewall change is needed: 8090 is only reached by NPM on the same machine.
@@ -100,10 +108,10 @@ ssh-keyscan devops-ora.tech | gh secret set SSH_KNOWN_HOSTS
 | Level | Tool | What it proves | Where |
 |-------|------|----------------|-------|
 | Unit (frontend) | Vitest | win detection, draw, AI picks win/blocks, player-name rules | `frontend/src/game/*.test.js` |
-| Unit (backend) | Vitest | request validation rules | `backend/tests/unit/` |
-| Component | **React Testing Library** + user-event | Home screen, mandatory distinct names, turn indicator, winner, rematch, PvE AI reply, POST sent | `frontend/src/**/*.test.jsx` |
-| Integration | Vitest + Supertest + **real PostgreSQL** | HTTP → Express → SQL → response, leaderboard aggregation | `backend/tests/integration/` |
-| E2E | **Playwright** (Chromium) | browser → nginx → Express → Postgres → UI on the actual compose stack | `e2e/tests/` |
+| Unit (backend) | Vitest | request validation; lobby: pairing, one seat per name, turn order, five in a row, forfeits | `backend/tests/unit/` |
+| Component | **React Testing Library** + user-event + fake WebSocket | single name field, matchmaking states, server-confirmed moves, turn hand-over to the AI, forfeit, name taken | `frontend/src/**/*.test.jsx` |
+| Integration | Vitest + Supertest + `ws` + **real PostgreSQL** | HTTP → Express → SQL; two WebSocket clients matched and playing, result stored by the server | `backend/tests/integration/` |
+| E2E | **Playwright** (Chromium) | two isolated browser contexts find each other and play through nginx → WebSocket → Express → Postgres; AI game | `e2e/tests/` |
 
 Why Playwright over Cypress: first-class headless Chromium in GitHub Actions
 (`npx playwright install --with-deps`), official linux-arm64 builds (so the same suite can also run
@@ -151,4 +159,6 @@ To inspect the data: `cd ~/amoba && docker compose exec db psql -U amoba -d amob
 2. Make a small visible change, `git push`.
 3. Show the Actions run: 3 test jobs → E2E → deploy; open the Playwright HTML report artifact.
 4. Refresh `https://amoba.devops-ora.tech` — footer shows the new commit sha.
-5. Play a PvE match, show the leaderboard update (persisted in Postgres across redeploys).
+5. Open the site on two devices (e.g. laptop + phone), enter two names, press **Find Opponent** on
+   both: they are paired and every move appears on the other screen. Show the leaderboard update.
+6. Play a quick game against the Neon AI.

@@ -1,4 +1,4 @@
-// Mirrors backend/src/validation.js so the UI can explain problems before saving.
+// Mirrors backend/src/validation.js so the UI can explain problems before joining.
 export const AI_NAME = 'Neon AI';
 export const NAME_MAX = 20;
 const RESERVED = ['player x', 'player o', 'player', 'x', 'o', 'anonymous', 'guest'];
@@ -14,17 +14,3 @@ export function nameError(raw) {
   if (name.toLowerCase() === AI_NAME.toLowerCase()) return 'That name belongs to the computer';
   return null;
 }
-
-/** Returns { X, O } error messages (null when valid). */
-export function validatePlayers(mode, names) {
-  const X = nameError(names.X);
-  if (mode === 'pve') return { X, O: null };
-  let O = nameError(names.O);
-  if (!X && !O && cleanName(names.X).toLowerCase() === cleanName(names.O).toLowerCase()) {
-    O = 'Players need different names';
-  }
-  return { X, O };
-}
-
-/** "Dorina's turn", "James' turn" */
-export const possessive = (name) => (/s$/i.test(name) ? `${name}'` : `${name}'s`);

@@ -32,7 +32,7 @@ export default function RecentMatches({ refreshKey = 0 }) {
             <li key={m.id}>
               <span>{describe(m)}</span>
               <span className="muted">
-                {m.mode === 'pve' ? 'vs AI' : 'PvP'} · {m.moves} moves
+                {m.mode === 'pve' ? 'vs AI' : 'Online'} · {m.moves} moves
               </span>
             </li>
           ))}

@@ -47,3 +47,12 @@ describe('validateMatch (unit)', () => {
     expect(validateMatch({ ...pvp, moves: 4.5 }).valid).toBe(false);
   });
 });
+
+describe('validateMatch with restricted modes (REST endpoint)', () => {
+  it('rejects PvP results when only AI games may be submitted', () => {
+    const r = validateMatch(pvp, { modes: ['pve'] });
+    expect(r.valid).toBe(false);
+    expect(r.errors).toContain('mode must be one of pve');
+    expect(validateMatch(pve, { modes: ['pve'] }).valid).toBe(true);
+  });
+});

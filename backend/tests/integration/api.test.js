@@ -51,7 +51,7 @@ describe('Amoba API + PostgreSQL (integration)', () => {
     for (const playerX of ['Dorina', 'dorina']) {
       await request(app)
         .post('/api/matches')
-        .send({ playerX, playerO: 'Bence', mode: 'pvp', winner: 'X', moves: 9 });
+        .send({ playerX, playerO: 'Neon AI', mode: 'pve', winner: 'X', moves: 9 });
     }
     const board = await request(app).get('/api/leaderboard');
     expect(board.body[0]).toEqual({ name: 'Dorina', wins: 2, losses: 0, draws: 0, games: 2 });
@@ -65,7 +65,7 @@ describe('Amoba API + PostgreSQL (integration)', () => {
 
     const generic = await request(app)
       .post('/api/matches')
-      .send({ playerX: 'Player X', playerO: 'Player O', mode: 'pvp', winner: 'X', moves: 9 });
+      .send({ playerX: 'Player X', playerO: 'Neon AI', mode: 'pve', winner: 'X', moves: 9 });
     expect(generic.status).toBe(400);
 
     const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM matches');
@@ -76,7 +76,7 @@ describe('Amoba API + PostgreSQL (integration)', () => {
     for (const winner of ['X', 'O']) {
       await request(app)
         .post('/api/matches')
-        .send({ playerX: 'Alice', playerO: 'Bob', mode: 'pvp', winner, moves: 10 });
+        .send({ playerX: 'Alice', playerO: 'Neon AI', mode: 'pve', winner, moves: 10 });
     }
     const res = await request(app).get('/api/matches');
     expect(res.body.map((m) => m.winner)).toEqual(['O', 'X']);
