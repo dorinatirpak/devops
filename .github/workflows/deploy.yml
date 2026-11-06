@@ -1,4 +1,4 @@
-name: CI/CD – Neon Gothic Amőba
+name: CI/CD – Neon Requiem
 
 on:
   push:
@@ -139,8 +139,8 @@ jobs:
       - name: Upload source to the server
         run: |
           # The server has no git: ship a tarball of exactly what the images need.
-          tar czf - --exclude=node_modules --exclude=dist docker-compose.yml backend frontend \
-            | ssh vps "mkdir -p $DEPLOY_DIR && cd $DEPLOY_DIR && rm -rf backend frontend && tar xzf -"
+          tar czf - --exclude=node_modules --exclude=dist docker-compose.yml backend frontend scripts \
+            | ssh vps "mkdir -p $DEPLOY_DIR && cd $DEPLOY_DIR && rm -rf backend frontend scripts && tar xzf -"
 
       - name: Build on ARM64 and (re)start containers
         env:

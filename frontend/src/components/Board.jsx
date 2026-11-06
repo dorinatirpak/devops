@@ -5,7 +5,7 @@ export default function Board({ board, onCellClick, winningLine = [], disabled =
     <div
       className="board"
       role="grid"
-      aria-label="Amőba board"
+      aria-label="Game board"
       style={{ '--size': size }}
     >
       {board.map((value, i) => {
