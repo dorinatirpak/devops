@@ -1,6 +1,6 @@
-# Neon Gothic Amőba
+# Neon Requiem
 
-Gomoku/Amőba (15×15, five in a row) with **PvP** and **PvE** modes, a match history and a leaderboard.
+Five-in-a-row (Gomoku, 15×15) with **Player vs Player** and **Player vs AI** modes, mandatory player names, match history and a leaderboard. Internally the stack is still called `amoba` (compose project, folder, images).
 University DevOps project: the focus is the **testing → CI/CD → Docker deployment** lifecycle.
 
 | Tier | Tech | Container | Host port |
@@ -10,9 +10,9 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
 | Database | PostgreSQL 16 | `amoba-db-1` | none (internal network only) |
 
 > **Isolation from `hazi-projekt`:** the old project already uses host ports 8080/4000.
-> Amőba uses its own compose project name (`amoba`), its own folder (`~/amoba`), its own
-> networks and volume, and ports 8090/4010. Deploying Amőba never touches `~/hazi-projekt`.
-> To make Amőba take over 8080/4000 later, stop `hazi-projekt` and change `FRONTEND_PORT`/`BACKEND_PORT`.
+> Neon Requiem uses its own compose project name (`amoba`), its own folder (`~/amoba`), its own
+> networks and volume, and ports 8090/4010. Deploying Neon Requiem never touches `~/hazi-projekt`.
+> To make Neon Requiem take over 8080/4000 later, stop `hazi-projekt` and change `FRONTEND_PORT`/`BACKEND_PORT`.
 
 ---
 
@@ -99,9 +99,9 @@ ssh-keyscan devops-ora.tech | gh secret set SSH_KNOWN_HOSTS
 
 | Level | Tool | What it proves | Where |
 |-------|------|----------------|-------|
-| Unit (frontend) | Vitest | win detection, draw, AI picks win/blocks | `frontend/src/game/logic.test.js` |
+| Unit (frontend) | Vitest | win detection, draw, AI picks win/blocks, player-name rules | `frontend/src/game/*.test.js` |
 | Unit (backend) | Vitest | request validation rules | `backend/tests/unit/` |
-| Component | **React Testing Library** + user-event | UI behaves like a user sees it: turns, winner banner, PvE AI reply, POST sent | `frontend/src/**/*.test.jsx` |
+| Component | **React Testing Library** + user-event | Home screen, mandatory distinct names, turn indicator, winner, rematch, PvE AI reply, POST sent | `frontend/src/**/*.test.jsx` |
 | Integration | Vitest + Supertest + **real PostgreSQL** | HTTP → Express → SQL → response, leaderboard aggregation | `backend/tests/integration/` |
 | E2E | **Playwright** (Chromium) | browser → nginx → Express → Postgres → UI on the actual compose stack | `e2e/tests/` |
 
@@ -127,8 +127,26 @@ docker compose up -d --build --wait
 cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
 
-## 6. Presentation checklist (Dec 9)
+## 6. Resetting the database (leaderboard / match history)
 
+All data lives in one table (`matches`); the leaderboard is computed from it. Pick one:
+
+| Where | Command | What it does |
+|-------|---------|--------------|
+| GitHub (one click) | Actions → **Reset leaderboard (production)** → Run workflow → type `RESET` | SSHes to the VPS, runs the script below, verifies `/api/leaderboard` is `[]` |
+| On the server | `~/amoba/scripts/reset-db.sh` (asks for confirmation; `--yes` skips it) | `TRUNCATE matches RESTART IDENTITY` inside the running `db` container |
+| On the server, manually | `cd ~/amoba && docker compose exec db psql -U amoba -d amoba -c "TRUNCATE matches RESTART IDENTITY;"` | same as the script |
+| Nuclear (wipe the volume) | `cd ~/amoba && docker compose down -v && docker compose up -d --wait` | deletes the Postgres volume; the backend recreates the table on start |
+| Local stack | `./scripts/reset-db.sh` from the repo root | same, against your local compose stack |
+
+Containers keep running for the first three options, so the site never goes down. Never run
+`docker compose down -v` inside `~/hazi-projekt` by mistake — always `cd ~/amoba` first.
+
+To inspect the data: `cd ~/amoba && docker compose exec db psql -U amoba -d amoba -c "SELECT * FROM matches ORDER BY id DESC LIMIT 10;"`
+
+## 7. Presentation checklist (Dec 9)
+
+0. The day before: run **Reset leaderboard** so the demo starts with a clean board.
 1. Show `docker compose ps` on the server: 3 healthy containers, DB without a host port.
 2. Make a small visible change, `git push`.
 3. Show the Actions run: 3 test jobs → E2E → deploy; open the Playwright HTML report artifact.

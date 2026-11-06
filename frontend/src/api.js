@@ -9,6 +9,7 @@ async function request(path, options) {
 }
 
 export const fetchLeaderboard = () => request('/api/leaderboard');
+export const fetchRecentMatches = (limit = 5) => request(`/api/matches?limit=${limit}`);
 export const fetchHealth = () => request('/api/health');
 export const saveMatch = (match) =>
   request('/api/matches', { method: 'POST', body: JSON.stringify(match) });

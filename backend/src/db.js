@@ -62,14 +62,15 @@ export async function getLeaderboard(pool, limit = 10) {
               (winner = 'O')::int, (winner = 'X')::int, (winner = 'draw')::int
        FROM matches
      )
-     SELECT name,
+     -- "Dorina" and "dorina" are the same player
+     SELECT MIN(name)      AS name,
             SUM(win)::int  AS wins,
             SUM(loss)::int AS losses,
             SUM(draw)::int AS draws,
             COUNT(*)::int  AS games
      FROM results
-     GROUP BY name
-     ORDER BY wins DESC, losses ASC, name ASC
+     GROUP BY lower(name)
+     ORDER BY wins DESC, losses ASC, MIN(name) ASC
      LIMIT $1`,
     [limit],
   );

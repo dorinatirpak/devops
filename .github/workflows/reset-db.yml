@@ -1,0 +1,41 @@
+name: Reset leaderboard (production)
+
+# Manual only: Actions tab -> "Reset leaderboard (production)" -> Run workflow -> type RESET.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type RESET to delete all matches and leaderboard data'
+        required: true
+
+concurrency:
+  group: amoba-refs/heads/main   # never overlaps a deploy
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Clear match history on devops-ora.tech
+    if: inputs.confirm == 'RESET'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host vps
+            HostName ${{ secrets.SSH_HOST }}
+            User ${{ secrets.SSH_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+          EOF
+
+      - name: Truncate the matches table
+        run: ssh vps "bash /home/dorina/amoba/scripts/reset-db.sh --yes"
+
+      - name: Verify the leaderboard is empty
+        run: |
+          ssh vps "curl -fsS http://127.0.0.1:4010/api/leaderboard" | tee /dev/stderr | grep -qx '\[\]'
