@@ -1,17 +1,32 @@
 import { useCallback, useEffect, useState } from 'react';
 import HomeScreen from './components/HomeScreen';
-import SetupScreen from './components/SetupScreen';
-import GameScreen from './components/GameScreen';
+import OnlineScreen from './components/OnlineScreen';
+import AiGameScreen from './components/AiGameScreen';
 import { fetchHealth } from './api';
 
 export const APP_NAME = 'Neon Requiem';
 export { AI_NAME } from './game/names';
 
+const NAME_KEY = 'neon-requiem:name';
+const loadName = () => {
+  try {
+    return localStorage.getItem(NAME_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+const storeName = (name) => {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {
+    /* private mode: just don't remember it */
+  }
+};
+
 export default function App() {
-  const [screen, setScreen] = useState('home'); // 'home' | 'setup' | 'game'
-  // Last used settings: prefilled when starting another game in this session.
-  const [setup, setSetup] = useState({ mode: 'pvp', names: { X: '', O: '' } });
-  const [game, setGame] = useState(null); // { id, mode, players: { X, O } }
+  const [screen, setScreen] = useState('home'); // 'home' | 'online' | 'ai'
+  const [name, setName] = useState(loadName);
+  const [round, setRound] = useState(0); // new key = fresh game / fresh search
   const [refreshKey, setRefreshKey] = useState(0);
   const [version, setVersion] = useState(null);
 
@@ -19,11 +34,14 @@ export default function App() {
     fetchHealth().then((h) => setVersion(h.version)).catch(() => setVersion(null));
   }, []);
 
-  const start = (mode, players) => {
-    setSetup((s) => ({ mode, names: { X: players.X, O: mode === 'pvp' ? players.O : s.names.O } }));
-    setGame({ id: Date.now(), mode, players });
-    setScreen('game');
+  const play = (mode, playerName) => {
+    setName(playerName);
+    storeName(playerName);
+    setRound((r) => r + 1);
+    setScreen(mode);
   };
+  const again = () => setRound((r) => r + 1);
+  const home = () => setScreen('home');
   const onSaved = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   return (
@@ -38,20 +56,12 @@ export default function App() {
       </header>
 
       <main>
-        {screen === 'home' && <HomeScreen onNewGame={() => setScreen('setup')} refreshKey={refreshKey} />}
-        {screen === 'setup' && (
-          <SetupScreen initial={setup} onStart={start} onBack={() => setScreen('home')} />
+        {screen === 'home' && <HomeScreen initialName={name} onPlay={play} refreshKey={refreshKey} />}
+        {screen === 'online' && (
+          <OnlineScreen key={round} name={name} refreshKey={refreshKey} onSaved={onSaved} onAgain={again} onHome={home} />
         )}
-        {screen === 'game' && game && (
-          <GameScreen
-            key={game.id}
-            mode={game.mode}
-            players={game.players}
-            refreshKey={refreshKey}
-            onSaved={onSaved}
-            onRematch={() => setGame((g) => ({ ...g, id: Date.now() }))}
-            onHome={() => setScreen('home')}
-          />
+        {screen === 'ai' && (
+          <AiGameScreen key={round} name={name} refreshKey={refreshKey} onSaved={onSaved} onRematch={again} onHome={home} />
         )}
       </main>
 

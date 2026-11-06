@@ -19,17 +19,18 @@ export function nameError(name, label) {
 }
 
 /**
- * Validates a finished match payload coming from the client.
+ * Validates a finished match payload. The REST endpoint only accepts `pve`
+ * (pass { modes: ['pve'] }); online PvP matches are recorded by the lobby.
  * Pure function -> unit-testable without HTTP or a database.
  */
-export function validateMatch(body = {}) {
+export function validateMatch(body = {}, { modes = MODES } = {}) {
   const errors = [];
   const playerX = cleanName(body.playerX);
   const pve = body.mode === 'pve';
   // In PvE the opponent is always the AI, whatever the client sent.
   const playerO = pve ? AI_NAME : cleanName(body.playerO);
 
-  if (!MODES.includes(body.mode)) errors.push(`mode must be one of ${MODES.join(', ')}`);
+  if (!modes.includes(body.mode)) errors.push(`mode must be one of ${modes.join(', ')}`);
   const xErr = nameError(playerX, 'playerX');
   if (xErr) errors.push(xErr);
   if (!pve) {

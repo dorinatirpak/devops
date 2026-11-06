@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     // `npm run dev` talks to a locally running backend; in Docker, nginx does this.
-    proxy: { '/api': 'http://localhost:4000' },
+    proxy: { '/api': { target: 'http://localhost:4000', ws: true } },
   },
   test: {
     environment: 'jsdom',

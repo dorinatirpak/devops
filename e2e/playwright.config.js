@@ -6,6 +6,9 @@ export default defineConfig({
   testDir: './tests',
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
+  // One worker: online tests share a single matchmaking queue, so parallel
+  // tests could be paired with each other.
+  workers: 1,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8090',

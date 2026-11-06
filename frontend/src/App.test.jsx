@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import App, { APP_NAME, AI_NAME } from './App';
@@ -17,18 +17,62 @@ function mockFetch({ leaderboard = [], matches = [] } = {}) {
   return fetchMock;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+// Fake WebSocket: the test plays the role of the matchmaking server.
+class FakeSocket {
+  static OPEN = 1;
+  static all = [];
+  constructor(url) {
+    this.url = url;
+    this.readyState = 0;
+    this.sent = [];
+    FakeSocket.all.push(this);
+    queueMicrotask(() => {
+      this.readyState = FakeSocket.OPEN;
+      this.onopen?.();
+    });
+  }
+  send(data) {
+    this.sent.push(JSON.parse(data));
+  }
+  close() {
+    this.readyState = 3;
+  }
+  /** Server -> browser */
+  receive(msg) {
+    act(() => this.onmessage?.({ data: JSON.stringify(msg) }));
+  }
+}
+const lastSocket = () => FakeSocket.all.at(-1);
 
-async function startGame(user, { mode = 'pvp', x = 'Dorina', o = 'Bence' } = {}) {
-  await user.click(screen.getByRole('button', { name: 'New Game' }));
-  if (mode === 'pve') await user.click(screen.getByRole('radio', { name: /Player vs AI/ }));
-  if (x) await user.type(screen.getByLabelText('Player X'), x);
-  if (o && mode === 'pvp') await user.type(screen.getByLabelText('Player O'), o);
-  await user.click(screen.getByRole('button', { name: 'Start' }));
+beforeEach(() => {
+  FakeSocket.all = [];
+  vi.stubGlobal('WebSocket', FakeSocket);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+async function enterName(user, name) {
+  const input = screen.getByLabelText('Your name');
+  await user.clear(input);
+  if (name) await user.type(input, name);
+}
+
+/** Home -> Find Opponent -> paired by the fake server. */
+async function startOnline(user, { you = 'X', me = 'Dorina', rival = 'Bence' } = {}) {
+  await enterName(user, me);
+  await user.click(screen.getByRole('button', { name: 'Find Opponent' }));
+  const ws = lastSocket();
+  await waitFor(() => expect(ws.sent).toContainEqual({ type: 'join', name: me }));
+  ws.receive({ type: 'queued', name: me });
+  const players = you === 'X' ? { X: me, O: rival } : { X: rival, O: me };
+  ws.receive({ type: 'start', gameId: 1, you, players });
+  return ws;
 }
 
 describe('<App /> (react-testing-library)', () => {
-  it('opens on the home screen with title, New Game, leaderboard and recent matches', async () => {
+  it('opens on a home screen with one name field, both ways to play, leaderboard and recent matches', async () => {
     mockFetch({
       leaderboard: [{ name: 'Dorina', wins: 3, losses: 1, draws: 0, games: 4 }],
       matches: [{ id: 7, playerX: 'Dorina', playerO: 'Bence', mode: 'pvp', winner: 'X', moves: 17 }],
@@ -36,85 +80,134 @@ describe('<App /> (react-testing-library)', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { level: 1, name: APP_NAME })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New Game' })).toBeInTheDocument();
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(screen.getByLabelText('Your name')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Find Opponent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play vs AI' })).toBeInTheDocument();
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
 
     const leaderboard = screen.getByRole('region', { name: 'Leaderboard' });
     expect(await within(leaderboard).findByRole('cell', { name: 'Dorina' })).toBeInTheDocument();
     expect(await screen.findByText('Dorina beat Bence')).toBeInTheDocument();
+    expect(screen.getByText(/Online · 17 moves/)).toBeInTheDocument();
   });
 
-  it('requires real, distinct player names before a game can start', async () => {
+  it('requires a real name before matchmaking or an AI game can start', async () => {
     mockFetch();
     const user = userEvent.setup();
     render(<App />);
 
-    await startGame(user, { x: '', o: '' });
-    expect(screen.getByLabelText('Player X')).toHaveAccessibleDescription('Enter a name');
-    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Find Opponent' }));
+    expect(screen.getByLabelText('Your name')).toHaveAccessibleDescription('Enter a name');
 
-    await user.type(screen.getByLabelText('Player X'), 'Player X');
-    await user.type(screen.getByLabelText('Player O'), 'Dorina');
-    await user.click(screen.getByRole('button', { name: 'Start' }));
-    expect(screen.getByLabelText('Player X')).toHaveAccessibleDescription('Pick something more personal');
+    await enterName(user, 'Player X');
+    await user.click(screen.getByRole('button', { name: 'Play vs AI' }));
+    expect(screen.getByLabelText('Your name')).toHaveAccessibleDescription('Pick something more personal');
 
-    await user.clear(screen.getByLabelText('Player X'));
-    await user.type(screen.getByLabelText('Player X'), 'dorina');
-    await user.click(screen.getByRole('button', { name: 'Start' }));
-    expect(screen.getByLabelText('Player O')).toHaveAccessibleDescription('Players need different names');
+    expect(FakeSocket.all).toHaveLength(0);
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
   });
 
-  it('shows whose turn it is and announces the winner in PvP', async () => {
+  it('matches you with a real opponent and plays the moves the server confirms', async () => {
     const fetchMock = mockFetch();
     const user = userEvent.setup();
     render(<App />);
-    await startGame(user);
 
-    expect(screen.getByRole('status')).toHaveTextContent("Dorina's turn");
-    // X: row 1 cols 1-5, O: row 2 cols 1-4
-    for (let c = 0; c < 4; c++) {
-      await user.click(screen.getByTestId(`cell-0-${c}`));
-      if (c === 0) expect(screen.getByRole('status')).toHaveTextContent("Bence's turn");
-      await user.click(screen.getByTestId(`cell-1-${c}`));
-    }
-    await user.click(screen.getByTestId('cell-0-4'));
+    await enterName(user, 'Dorina');
+    await user.click(screen.getByRole('button', { name: 'Find Opponent' }));
+    const ws = lastSocket();
+    expect(ws.url).toMatch(/^ws:\/\/.+\/api\/ws$/);
+    await waitFor(() => expect(ws.sent).toEqual([{ type: 'join', name: 'Dorina' }]));
+    ws.receive({ type: 'queued', name: 'Dorina' });
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for a challenger, Dorina…');
 
-    expect(screen.getByRole('status')).toHaveTextContent('Dorina wins');
-    expect(screen.getByTestId('cell-5-5')).toBeDisabled();
+    ws.receive({ type: 'start', gameId: 1, you: 'X', players: { X: 'Dorina', O: 'Bence' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Your turn');
+    expect(screen.getByTestId('chip-X')).toHaveTextContent(/Dorina\s*you/);
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/matches', expect.objectContaining({ method: 'POST' })),
-    );
-    const [, { body }] = fetchMock.mock.calls.find(([u, o]) => u === '/api/matches' && o?.method === 'POST');
-    expect(JSON.parse(body)).toEqual({ playerX: 'Dorina', playerO: 'Bence', mode: 'pvp', winner: 'X', moves: 9 });
+    // Clicking only asks the server; the stone appears once the server confirms it.
+    await user.click(screen.getByTestId('cell-7-7'));
+    expect(ws.sent.at(-1)).toEqual({ type: 'move', index: 112 });
+    expect(screen.getByTestId('cell-7-7')).toHaveTextContent('');
 
-    // Rematch keeps the players and clears the board.
-    await user.click(screen.getByRole('button', { name: 'Rematch' }));
-    expect(screen.getByRole('status')).toHaveTextContent("Dorina's turn");
-    expect(screen.getByTestId('cell-0-0')).toBeEnabled();
+    ws.receive({ type: 'move', index: 112, mark: 'X', next: 'O' });
+    expect(screen.getByTestId('cell-7-7')).toHaveTextContent('X');
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for Bence');
+    expect(screen.getByTestId('cell-0-0')).toBeDisabled(); // not your turn
+
+    ws.receive({ type: 'move', index: 0, mark: 'O', next: 'X' });
+    expect(screen.getByRole('status')).toHaveTextContent('Your turn');
+    expect(screen.getByTestId('cell-0-1')).toBeEnabled();
+
+    ws.receive({ type: 'end', winner: 'O', line: [0, 1, 2, 3, 4], reason: 'five' });
+    expect(screen.getByRole('status')).toHaveTextContent('Bence wins');
+    expect(screen.getByTestId('cell-0-0')).toHaveClass('cell--win');
+
+    // The server saves online games; the browser only refreshes the leaderboard.
+    const lbCalls = () => fetchMock.mock.calls.filter(([u]) => u === '/api/leaderboard').length;
+    const before = lbCalls();
+    ws.receive({ type: 'saved' });
+    await waitFor(() => expect(lbCalls()).toBeGreaterThan(before));
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/matches', expect.objectContaining({ method: 'POST' }));
   });
 
-  it('lets the AI answer in PvE mode', async () => {
+  it('announces a forfeit and can search for a new opponent', async () => {
     mockFetch();
     const user = userEvent.setup();
     render(<App />);
-    await startGame(user, { mode: 'pve' });
+    const ws = await startOnline(user, { you: 'O' });
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for Bence');
 
-    expect(screen.getByTestId('chip-O')).toHaveTextContent(AI_NAME);
-    await user.click(screen.getByTestId('cell-7-7'));
-    expect(await screen.findByRole('gridcell', { name: /: O$/ })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent("Dorina's turn");
+    ws.receive({ type: 'end', winner: 'O', line: [], reason: 'forfeit' });
+    expect(screen.getByRole('status')).toHaveTextContent('You win – opponent left');
+
+    await user.click(screen.getByRole('button', { name: 'New opponent' }));
+    expect(FakeSocket.all).toHaveLength(2);
+    await waitFor(() => expect(lastSocket().sent).toEqual([{ type: 'join', name: 'Dorina' }]));
   });
 
-  it('returns home and shows the deployed build version', async () => {
+  it('explains when the name is already playing online', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    render(<App />);
+    await enterName(user, 'Dorina');
+    await user.click(screen.getByRole('button', { name: 'Find Opponent' }));
+    lastSocket().receive({ type: 'error', code: 'name_taken', message: 'Dorina is already playing online' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Dorina is already playing online');
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Your name')).toHaveValue('Dorina');
+  });
+
+  it('hands the turn to the AI visibly, then back to you', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    render(<App />);
+    await enterName(user, 'Dorina');
+    await user.click(screen.getByRole('button', { name: 'Play vs AI' }));
+
+    expect(screen.getByTestId('chip-O')).toHaveTextContent(AI_NAME);
+    expect(screen.getByRole('status')).toHaveTextContent('Your turn');
+
+    await user.click(screen.getByTestId('cell-7-7'));
+    expect(screen.getByRole('status')).toHaveTextContent(`${AI_NAME} is thinking`);
+    expect(screen.getByRole('grid')).toHaveClass('board--waiting');
+    expect(screen.getByTestId('cell-0-0')).toBeDisabled();
+
+    expect(await screen.findByRole('gridcell', { name: /: O$/ }, { timeout: 3000 })).toHaveClass('cell--last');
+    expect(screen.getByRole('status')).toHaveTextContent('Your turn');
+    expect(screen.getByRole('grid')).not.toHaveClass('board--waiting');
+  });
+
+  it('returns home, remembers the name and shows the deployed build version', async () => {
     mockFetch();
     const user = userEvent.setup();
     render(<App />);
     expect(await screen.findByText('build abcdef1')).toBeInTheDocument();
 
-    await startGame(user);
+    await enterName(user, 'Dorina');
+    await user.click(screen.getByRole('button', { name: 'Play vs AI' }));
     await user.click(screen.getByRole('button', { name: 'Home' }));
-    expect(screen.getByRole('button', { name: 'New Game' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Your name')).toHaveValue('Dorina');
   });
 });
