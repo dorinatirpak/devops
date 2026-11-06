@@ -34,24 +34,29 @@ afterAll(async () => {
   await pool.end();
 });
 
-/** Opens a socket; next(type) resolves with the next message of that type. */
+/**
+ * Opens a socket; next(type, match) resolves with the first message of that type
+ * (optionally also matching a predicate). Both players receive every move, so
+ * tests wait for a specific move index rather than "any move".
+ */
 async function client() {
   const ws = new WebSocket(url);
   const inbox = [];
   const waiters = [];
+  const fits = (w, msg) => w.type === msg.type && w.match(msg);
   ws.on('message', (raw) => {
     const msg = JSON.parse(raw);
-    const i = waiters.findIndex((w) => w.type === msg.type);
+    const i = waiters.findIndex((w) => fits(w, msg));
     if (i >= 0) waiters.splice(i, 1)[0].resolve(msg);
     else inbox.push(msg);
   });
   await new Promise((r) => ws.once('open', r));
   return {
     send: (m) => ws.send(JSON.stringify(m)),
-    next: (type) => {
-      const i = inbox.findIndex((m) => m.type === type);
+    next: (type, match = () => true) => {
+      const i = inbox.findIndex((m) => fits({ type, match }, m));
       if (i >= 0) return Promise.resolve(inbox.splice(i, 1)[0]);
-      return new Promise((resolve) => waiters.push({ type, resolve }));
+      return new Promise((resolve) => waiters.push({ type, match, resolve }));
     },
     close: () => ws.close(),
   };
@@ -71,9 +76,9 @@ describe('Online matchmaking over WebSocket (integration)', () => {
 
     for (let c = 0; c < 4; c++) {
       a.send({ type: 'move', index: c });
-      await b.next('move');
+      await b.next('move', (m) => m.index === c);
       b.send({ type: 'move', index: 15 + c });
-      await a.next('move');
+      await a.next('move', (m) => m.index === 15 + c);
     }
     a.send({ type: 'move', index: 4 });
     expect(await b.next('end')).toMatchObject({ winner: 'X', reason: 'five' });
