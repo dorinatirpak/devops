@@ -1,7 +1,7 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
-import App, { APP_NAME, AI_NAME } from './App';
+import App, { AI_NAME } from './App';
 
 // Fake backend: the component tests must not depend on a running API.
 function mockFetch({ leaderboard = [], matches = [] } = {}) {
@@ -72,26 +72,6 @@ async function startOnline(user, { you = 'X', me = 'Dorina', rival = 'Bence' } =
 }
 
 describe('<App /> (react-testing-library)', () => {
-  it('opens on a home screen with one name field, both ways to play, leaderboard and recent matches', async () => {
-    mockFetch({
-      leaderboard: [{ name: 'Dorina', wins: 3, losses: 1, draws: 0, games: 4 }],
-      matches: [{ id: 7, playerX: 'Dorina', playerO: 'Bence', mode: 'pvp', winner: 'X', moves: 17 }],
-    });
-    render(<App />);
-
-    expect(screen.getByRole('heading', { level: 1, name: APP_NAME })).toBeInTheDocument();
-    expect(screen.getAllByRole('textbox')).toHaveLength(1);
-    expect(screen.getByLabelText('Your name')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Find Opponent' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Play vs AI' })).toBeInTheDocument();
-    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
-
-    const leaderboard = screen.getByRole('region', { name: 'Leaderboard' });
-    expect(await within(leaderboard).findByRole('cell', { name: 'Dorina' })).toBeInTheDocument();
-    expect(await screen.findByText('Dorina beat Bence')).toBeInTheDocument();
-    expect(screen.getByText(/Online · 17 moves/)).toBeInTheDocument();
-  });
-
   it('requires a real name before matchmaking or an AI game can start', async () => {
     mockFetch();
     const user = userEvent.setup();
@@ -197,17 +177,5 @@ describe('<App /> (react-testing-library)', () => {
     expect(await screen.findByRole('gridcell', { name: /: O$/ }, { timeout: 3000 })).toHaveClass('cell--last');
     expect(screen.getByRole('status')).toHaveTextContent('Your turn');
     expect(screen.getByRole('grid')).not.toHaveClass('board--waiting');
-  });
-
-  it('returns home, remembers the name and shows the deployed build version', async () => {
-    mockFetch();
-    const user = userEvent.setup();
-    render(<App />);
-    expect(await screen.findByText('build abcdef1')).toBeInTheDocument();
-
-    await enterName(user, 'Dorina');
-    await user.click(screen.getByRole('button', { name: 'Play vs AI' }));
-    await user.click(screen.getByRole('button', { name: 'Home' }));
-    expect(screen.getByLabelText('Your name')).toHaveValue('Dorina');
   });
 });

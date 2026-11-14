@@ -105,13 +105,15 @@ ssh-keyscan devops-ora.tech | gh secret set SSH_KNOWN_HOSTS
 
 ## 4. Testing strategy
 
-| Level | Tool | What it proves | Where |
-|-------|------|----------------|-------|
-| Unit (frontend) | Vitest | win detection, draw, AI picks win/blocks, player-name rules | `frontend/src/game/*.test.js` |
-| Unit (backend) | Vitest | request validation; lobby: pairing, one seat per name, turn order, five in a row, forfeits | `backend/tests/unit/` |
-| Component | **React Testing Library** + user-event + fake WebSocket | single name field, matchmaking states, server-confirmed moves, turn hand-over to the AI, forfeit, name taken | `frontend/src/**/*.test.jsx` |
-| Integration | Vitest + Supertest + `ws` + **real PostgreSQL** | HTTP → Express → SQL; two WebSocket clients matched and playing, result stored by the server | `backend/tests/integration/` |
-| E2E | **Playwright** (Chromium) | two isolated browser contexts find each other and play through nginx → WebSocket → Express → Postgres; AI game | `e2e/tests/` |
+Few tests, each guarding something that would really break: game rules, matchmaking, the
+security rules that stop forged results, and the full deployment path. No tests for trivial UI details.
+
+| Level | Tool | Tests | What they protect |
+|-------|------|------:|-------------------|
+| Unit | Vitest | 7 | Win detection edge cases (four is not enough, no wrap-around, draw), AI wins before blocking; lobby pairing, one seat per name (no self-play), server-side turn rules, server-decided wins, forfeits |
+| Integration | Vitest + Supertest + `ws` + **real PostgreSQL** | 4 | AI results stored and aggregated into the leaderboard; forged or invalid results rejected; two WebSocket clients matched, game played and saved by the server; duplicate name refused |
+| Component | **React Testing Library** + fake WebSocket | 5 | Name required, online game driven only by server-confirmed moves, forfeit and re-search, "name taken" error, AI turn hand-over |
+| E2E | **Playwright** (Chromium) on the real compose stack | 4 | Health through nginx to the DB, two separate browsers play a full match, same name cannot join twice, AI game |
 
 Why Playwright over Cypress: first-class headless Chromium in GitHub Actions
 (`npx playwright install --with-deps`), official linux-arm64 builds (so the same suite can also run

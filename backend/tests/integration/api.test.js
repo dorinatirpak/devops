@@ -24,61 +24,35 @@ afterAll(async () => {
 });
 
 describe('Amoba API + PostgreSQL (integration)', () => {
-  it('GET /api/health reports the database as up', async () => {
-    const res = await request(app).get('/api/health');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok', db: 'up', version: 'test' });
-  });
-
-  it('POST /api/matches persists a match and it shows up in the leaderboard', async () => {
-    const created = await request(app)
-      .post('/api/matches')
-      .send({ playerX: 'Dorina', playerO: 'Neon AI', mode: 'pve', winner: 'X', moves: 9 });
+  it('stores AI games and builds the leaderboard from them, merging names case-insensitively', async () => {
+    const post = (m) => request(app).post('/api/matches').send({ playerO: 'Neon AI', mode: 'pve', ...m });
+    const created = await post({ playerX: 'Dorina', winner: 'X', moves: 9 });
     expect(created.status).toBe(201);
-    expect(created.body).toMatchObject({ id: 1, playerX: 'Dorina', winner: 'X' });
-
-    await request(app)
-      .post('/api/matches')
-      .send({ playerX: 'Dorina', playerO: 'Neon AI', mode: 'pve', winner: 'draw', moves: 225 });
+    expect(created.body).toMatchObject({ id: 1, playerX: 'Dorina', playerO: 'Neon AI', winner: 'X' });
+    await post({ playerX: 'dorina', winner: 'X', moves: 11 });
+    await post({ playerX: 'Dorina', winner: 'draw', moves: 225 });
 
     const board = await request(app).get('/api/leaderboard');
-    expect(board.status).toBe(200);
-    expect(board.body[0]).toEqual({ name: 'Dorina', wins: 1, losses: 0, draws: 1, games: 2 });
-    expect(board.body[1]).toEqual({ name: 'Neon AI', wins: 0, losses: 1, draws: 1, games: 2 });
+    expect(board.body).toEqual([
+      { name: 'Dorina', wins: 2, losses: 0, draws: 1, games: 3 },
+      { name: 'Neon AI', wins: 0, losses: 2, draws: 1, games: 3 },
+    ]);
   });
 
-  it('GET /api/leaderboard merges names case-insensitively', async () => {
-    for (const playerX of ['Dorina', 'dorina']) {
-      await request(app)
-        .post('/api/matches')
-        .send({ playerX, playerO: 'Neon AI', mode: 'pve', winner: 'X', moves: 9 });
+  it('rejects forged or invalid results and stores nothing', async () => {
+    const forged = [
+      { playerX: 'Alice', playerO: 'Bob', mode: 'pvp', winner: 'X', moves: 9 }, // PvP is recorded by the server only
+      { playerX: 'Player X', mode: 'pve', winner: 'X', moves: 9 }, // generic name
+      { playerX: 'Neon AI', mode: 'pve', winner: 'X', moves: 9 }, // impersonating the AI
+      { playerX: 'Dorina', mode: 'pve', winner: 'X', moves: 500 }, // impossible move count
+      { playerX: '', mode: 'x' },
+    ];
+    for (const body of forged) {
+      const res = await request(app).post('/api/matches').send(body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect(res.body.errors.length).toBeGreaterThan(0);
     }
-    const board = await request(app).get('/api/leaderboard');
-    expect(board.body[0]).toEqual({ name: 'Dorina', wins: 2, losses: 0, draws: 0, games: 2 });
-    expect(board.body).toHaveLength(2);
-  });
-
-  it('POST /api/matches rejects invalid payloads and stores nothing', async () => {
-    const res = await request(app).post('/api/matches').send({ playerX: '', mode: 'x' });
-    expect(res.status).toBe(400);
-    expect(res.body.errors.length).toBeGreaterThan(0);
-
-    const generic = await request(app)
-      .post('/api/matches')
-      .send({ playerX: 'Player X', playerO: 'Neon AI', mode: 'pve', winner: 'X', moves: 9 });
-    expect(generic.status).toBe(400);
-
     const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM matches');
     expect(rows[0].n).toBe(0);
-  });
-
-  it('GET /api/matches returns newest first', async () => {
-    for (const winner of ['X', 'O']) {
-      await request(app)
-        .post('/api/matches')
-        .send({ playerX: 'Alice', playerO: 'Neon AI', mode: 'pve', winner, moves: 10 });
-    }
-    const res = await request(app).get('/api/matches');
-    expect(res.body.map((m) => m.winner)).toEqual(['O', 'X']);
   });
 });

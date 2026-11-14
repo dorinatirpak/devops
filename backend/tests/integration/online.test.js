@@ -101,11 +101,4 @@ describe('Online matchmaking over WebSocket (integration)', () => {
     a.close();
     b.close();
   });
-
-  it('POST /api/matches no longer accepts PvP results from browsers', async () => {
-    const res = await request(app)
-      .post('/api/matches')
-      .send({ playerX: 'Alice', playerO: 'Bob', mode: 'pvp', winner: 'X', moves: 9 });
-    expect(res.status).toBe(400);
-  });
 });
