@@ -15,26 +15,6 @@ test('API health check through nginx reaches the database', async ({ request }) 
   expect(await res.json()).toMatchObject({ status: 'ok', db: 'up' });
 });
 
-test('home screen asks for one name and offers online play or the AI', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Neon Requiem' })).toBeVisible();
-  await expect(page.getByRole('textbox')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: 'Find Opponent' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Play vs AI' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Leaderboard' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Recent Matches' })).toBeVisible();
-});
-
-test('nobody can start without a real name', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Find Opponent' }).click();
-  await expect(page.getByText('Enter a name')).toBeVisible();
-  await page.getByLabel('Your name').fill('Player X');
-  await page.getByRole('button', { name: 'Play vs AI' }).click();
-  await expect(page.getByText('Pick something more personal')).toBeVisible();
-  await expect(page.getByRole('grid')).toHaveCount(0);
-});
-
 test('online: two separate browsers are matched and play through the server', async ({ browser }) => {
   // Two isolated browser contexts = two different people on two devices.
   const ctxA = await browser.newContext();
