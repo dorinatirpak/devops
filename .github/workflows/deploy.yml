@@ -15,6 +15,7 @@ concurrency:
 env:
   NODE_VERSION: 22
   DEPLOY_DIR: /home/dorina/amoba     # separate from ~/hazi-projekt on purpose
+  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
   # ---------------------------------------------------------------- 1. Backend
@@ -110,10 +111,45 @@ jobs:
         if: always()
         run: docker compose down -v
 
-  # ------------------------------------------------- 4. Deploy to Oracle VPS
+  # ------------------------------------------- 4. Continuous delivery: Docker Hub
+  # Only tested code is published. Images are built for amd64 and arm64 (the
+  # Oracle VPS) and tagged with the commit SHA (immutable, easy rollback) and `latest`.
+  publish:
+    name: Publish to Docker Hub (${{ matrix.image }})
+    needs: [e2e]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push amoba-${{ matrix.image }}
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.image }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_USER }}/amoba-${{ matrix.image }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_USER }}/amoba-${{ matrix.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # ------------------------------------- 5. Continuous deployment: Oracle VPS
   deploy:
     name: Deploy to devops-ora.tech (ARM64)
-    needs: [e2e]
+    needs: [publish]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
@@ -136,13 +172,15 @@ jobs:
             IdentitiesOnly yes
           EOF
 
-      - name: Upload source to the server
+      - name: Upload compose file and scripts
         run: |
-          # The server has no git: ship a tarball of exactly what the images need.
-          tar czf - --exclude=node_modules --exclude=dist docker-compose.yml backend frontend scripts \
+          # No source code goes to the server: it only needs the compose file (image
+          # names) and the helper scripts. The source folders from the old
+          # build-on-server setup are removed.
+          tar czf - docker-compose.yml scripts \
             | ssh vps "mkdir -p $DEPLOY_DIR && cd $DEPLOY_DIR && rm -rf backend frontend scripts && tar xzf -"
 
-      - name: Build on ARM64 and (re)start containers
+      - name: Pull this commit's images from Docker Hub and (re)start
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
@@ -153,11 +191,22 @@ jobs:
           FRONTEND_PORT=8090
           BACKEND_PORT=4010
           APP_VERSION=${GITHUB_SHA}
+          DOCKERHUB_USER=${DOCKERHUB_USER}
+          IMAGE_TAG=${GITHUB_SHA}
           EOF
           ssh vps "cd $DEPLOY_DIR \
-            && docker compose up -d --build --wait --wait-timeout 300 --remove-orphans \
-            && docker compose ps \
-            && docker image prune -f"   # removes only dangling layers (old amoba builds)
+            && docker compose pull \
+            && docker compose up -d --no-build --wait --wait-timeout 300 --remove-orphans \
+            && docker compose ps"
+
+      - name: Remove older Neon Requiem images from the server
+        run: |
+          # Only this project's images (including the old locally built amoba-*:latest);
+          # hazi-projekt images are never touched. Images still in use are skipped.
+          ssh vps "docker images --format '{{.Repository}}:{{.Tag}}' \
+            | grep -E '(^|/)amoba-(backend|frontend):' \
+            | grep -v ':${GITHUB_SHA}' \
+            | xargs -r docker rmi || true"
 
       - name: Smoke test on the server
         run: |
