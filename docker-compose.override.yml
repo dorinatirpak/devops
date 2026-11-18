@@ -1,0 +1,8 @@
+# Loaded automatically by `docker compose` next to docker-compose.yml.
+# Local development and the CI E2E job build the images from source.
+# The server never receives this file, so there it pulls the images from Docker Hub.
+services:
+  backend:
+    build: ./backend
+  frontend:
+    build: ./frontend

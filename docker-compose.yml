@@ -1,5 +1,10 @@
-# Neon Gothic Amőba – 3-tier stack.
+# Neon Requiem (Amőba) – 3-tier stack.
 # Own compose project name ("amoba") so it never collides with ~/hazi-projekt.
+#
+# This file only names the images, so on the server `docker compose pull` fetches
+# them from Docker Hub. docker-compose.override.yml (loaded automatically when it
+# exists, i.e. in a git checkout: locally and in CI) adds `build:` so the same
+# command builds them from source instead. The server never gets that file.
 name: amoba
 
 services:
@@ -20,8 +25,7 @@ services:
     networks: [data]                     # NOT published to the host
 
   backend:
-    build: ./backend
-    image: amoba-backend:latest
+    image: ${DOCKERHUB_USER:-dorinatirpak2000}/amoba-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       PORT: 4000
@@ -36,8 +40,7 @@ services:
     networks: [data, web]
 
   frontend:
-    build: ./frontend
-    image: amoba-frontend:latest
+    image: ${DOCKERHUB_USER:-dorinatirpak2000}/amoba-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       backend:

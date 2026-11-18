@@ -48,9 +48,16 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
 * **Healthchecks + `depends_on: service_healthy`** give a deterministic start order:
   db → backend → frontend. `docker compose up --wait` blocks until all three are healthy, which the
   pipeline uses as a deployment gate.
-* **ARM64:** every base image (`node:22-alpine`, `nginx:1.27-alpine`, `postgres:16-alpine`) is
-  multi-arch. CI builds amd64 images to run E2E; the VPS builds arm64 images natively during deploy
-  (the repo is private, so free GitHub ARM runners aren't available, and QEMU emulation is slow).
+* **Docker Hub + ARM64:** CI publishes `dorinatirpak2000/amoba-backend` and
+  `dorinatirpak2000/amoba-frontend` as multi-arch images (`linux/amd64` + `linux/arm64`), tagged with
+  the commit SHA and `latest`. The VPS only **pulls** them; it never builds. Building stays fast
+  without ARM emulation: the `npm ci` / `vite build` stages run on the CI machine's own architecture
+  (`FROM --platform=$BUILDPLATFORM`), which is safe because the dependencies are pure JavaScript and
+  the frontend output is static files. The arm64 runtime stages contain only `COPY`.
+* **Two compose files:** `docker-compose.yml` names the images (used everywhere).
+  `docker-compose.override.yml` adds `build:` and is loaded automatically in a git checkout, so
+  locally and in CI the same `docker compose up` builds from source. The server never receives the
+  override file, so there `docker compose pull` fetches the images from Docker Hub.
 
 ## 2. Nginx Proxy Manager setup (one time)
 
@@ -74,14 +81,18 @@ push to main
    ├─► backend-tests   (unit + integration against a Postgres service container)
    ├─► frontend-tests  (unit + React Testing Library, then `vite build`)
    └─► e2e             (docker compose up the real 3-tier stack → Playwright/Chromium)
-          └─► deploy   (only on push to main, only if everything above is green)
-                 1. tar the source → ssh → ~/amoba   (the server has no git)
-                 2. write ~/amoba/.env from GitHub Secrets
-                 3. docker compose up -d --build --wait   (native ARM64 build)
-                 4. smoke test: curl /api/health + frontend on the server
+          └─► publish  (continuous delivery; only on main, only if everything above is green)
+                 buildx → amd64 + arm64 images → Docker Hub, tags :<commit sha> and :latest
+                 └─► deploy   (continuous deployment)
+                        1. ssh: copy docker-compose.yml + scripts to ~/amoba (no source code)
+                        2. write ~/amoba/.env from GitHub Secrets (IMAGE_TAG = commit sha)
+                        3. docker compose pull && docker compose up -d --no-build --wait
+                        4. remove older amoba images, smoke test /api/health + frontend
 ```
 
-Pull requests run all tests but never deploy. The UI footer shows `build <commit sha>`, so during
+Pull requests run all tests but never publish or deploy. Every deploy runs exactly the image that
+was published for that commit, so a rollback means setting `IMAGE_TAG` to an older SHA and
+running `docker compose up -d` again. The UI footer shows `build <commit sha>`, so during
 the presentation you can prove the live site runs the commit you just pushed.
 
 ### GitHub Secrets (Settings → Secrets and variables → Actions)
@@ -93,6 +104,12 @@ the presentation you can prove the live site runs the commit you just pushed.
 | `SSH_PRIVATE_KEY` | private key of a **dedicated deploy key** (see below) |
 | `SSH_KNOWN_HOSTS` | output of `ssh-keyscan devops-ora.tech` (pins the server's host key) |
 | `POSTGRES_PASSWORD` | a long random string (e.g. `openssl rand -hex 24`) |
+| `DOCKERHUB_USERNAME` | `dorinatirpak2000` |
+| `DOCKERHUB_TOKEN` | a Docker Hub **personal access token** with *Read & Write* access (Account settings → Personal access tokens). Never your Docker Hub password. |
+
+The two Docker Hub repositories are created automatically by the first push. Keep them **public**
+(free accounts get only one private repository, and the server pulls without logging in). The
+images contain no secrets: the database password lives only in `~/amoba/.env` on the server.
 
 Create a dedicated deploy key instead of reusing your personal Oracle key:
 
@@ -159,7 +176,8 @@ To inspect the data: `cd ~/amoba && docker compose exec db psql -U amoba -d amob
 0. The day before: run **Reset leaderboard** so the demo starts with a clean board.
 1. Show `docker compose ps` on the server: 3 healthy containers, DB without a host port.
 2. Make a small visible change, `git push`.
-3. Show the Actions run: 3 test jobs → E2E → deploy; open the Playwright HTML report artifact.
+3. Show the Actions run: test jobs → E2E → publish → deploy; open the Playwright HTML report artifact.
+   Then show Docker Hub: both repositories have a new tag equal to the commit SHA, for amd64 and arm64.
 4. Refresh `https://amoba.devops-ora.tech` — footer shows the new commit sha.
 5. Open the site on two devices (e.g. laptop + phone), enter two names, press **Find Opponent** on
    both: they are paired and every move appears on the other screen. Show the leaderboard update.

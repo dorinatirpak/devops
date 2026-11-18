@@ -1,5 +1,9 @@
+# Published to Docker Hub for linux/amd64 and linux/arm64 (the Oracle VPS).
+
 # ---- Stage 1: build the static React bundle ----
-FROM node:22-alpine AS build
+# Runs on the CI machine's own architecture: the output is plain HTML/JS/CSS,
+# identical for every platform, so there is no need to emulate ARM here.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
