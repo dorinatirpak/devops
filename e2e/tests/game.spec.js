@@ -32,7 +32,8 @@ test('online: two separate browsers are matched and play through the server', as
   await expect(b.getByRole('grid', { name: 'Game board' })).toBeVisible();
 
   // The server picks colours at random; work out who is X.
-  const aIsX = /you/.test(await a.getByTestId('chip-X').innerText());
+  // textContent, not innerText: CSS shows the tag as "YOU", the DOM text is "you".
+  const aIsX = (await a.getByTestId('chip-X').textContent()).includes('you');
   const [x, o] = aIsX ? [a, b] : [b, a];
   const [xName, oName] = aIsX ? [nameA, nameB] : [nameB, nameA];
 
