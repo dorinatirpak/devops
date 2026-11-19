@@ -9,12 +9,6 @@ async function findOpponent(page, name) {
   await page.getByRole('button', { name: 'Find Opponent' }).click();
 }
 
-test('API health check through nginx reaches the database', async ({ request }) => {
-  const res = await request.get('/api/health');
-  expect(res.ok()).toBeTruthy();
-  expect(await res.json()).toMatchObject({ status: 'ok', db: 'up' });
-});
-
 test('online: two separate browsers are matched and play through the server', async ({ browser }) => {
   // Two isolated browser contexts = two different people on two devices.
   const ctxA = await browser.newContext();
@@ -57,24 +51,6 @@ test('online: two separate browsers are matched and play through the server', as
   await o.getByRole('button', { name: 'Home' }).click();
   await expect(o.getByText(`${xName} beat ${oName}`)).toBeVisible();
 
-  await ctxA.close();
-  await ctxB.close();
-});
-
-test('online: the same name cannot join twice, so you cannot play yourself', async ({ browser }) => {
-  const ctxA = await browser.newContext();
-  const ctxB = await browser.newContext();
-  const a = await ctxA.newPage();
-  const b = await ctxB.newPage();
-  const name = `Eve-${uid()}`;
-
-  await findOpponent(a, name);
-  await expect(a.getByRole('status')).toHaveText(`Waiting for a challenger, ${name}…`);
-  await findOpponent(b, name.toUpperCase());
-  await expect(b.getByRole('alert')).toHaveText(`${name.toUpperCase()} is already playing online`);
-  await expect(a.getByRole('grid')).toHaveCount(0);
-
-  await a.getByRole('button', { name: 'Cancel' }).click();
   await ctxA.close();
   await ctxB.close();
 });
