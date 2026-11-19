@@ -4,7 +4,7 @@ Five-in-a-row (Gomoku, 15×15). Enter your name once, then either **Find Opponen
 University DevOps project: the focus is the **testing → CI/CD → Docker deployment** lifecycle.
 
 | Tier | Tech | Container | Host port |
-|------|------|-----------|-----------|
+| ------ | ------ | ----------- | ----------- |
 | Frontend | React 18 + Vite, served by nginx | `amoba-frontend-1` | `8090` (public via NPM) |
 | Backend | Node 22 + Express | `amoba-backend-1` | `127.0.0.1:4010` (server-local only) |
 | Database | PostgreSQL 16 | `amoba-db-1` | none (internal network only) |
@@ -18,7 +18,7 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
 
 ## 1. Architecture
 
-```
+```text
  Browser ──HTTPS──► Cloudflare DNS ──► Oracle VPS :443
                                           │
                               Nginx Proxy Manager (npm-npm-1, Let's Encrypt)
@@ -76,7 +76,7 @@ No firewall change is needed: 8090 is only reached by NPM on the same machine.
 
 ## 3. CI/CD pipeline — `.github/workflows/deploy.yml`
 
-```
+```text
 push to main
    ├─► backend-tests   (unit + integration against a Postgres service container)
    ├─► frontend-tests  (unit + React Testing Library, then `vite build`)
@@ -98,7 +98,7 @@ the presentation you can prove the live site runs the commit you just pushed.
 ### GitHub Secrets (Settings → Secrets and variables → Actions)
 
 | Secret | Value |
-|--------|-------|
+| -------- | ------- |
 | `SSH_HOST` | `devops-ora.tech` (or the VPS public IP) |
 | `SSH_USER` | `dorina` |
 | `SSH_PRIVATE_KEY` | private key of a **dedicated deploy key** (see below) |
@@ -126,7 +126,7 @@ Few tests, each guarding something that would really break: game rules, matchmak
 security rules that stop forged results, and the full deployment path. No tests for trivial UI details.
 
 | Level | Tool | Tests | What they protect |
-|-------|------|------:|-------------------|
+| ------- | ------ | ------: | ------------------- |
 | Unit | Vitest | 7 | Win detection edge cases (four is not enough, no wrap-around, draw), AI wins before blocking; lobby pairing, one seat per name (no self-play), server-side turn rules, server-decided wins, forfeits |
 | Integration | Vitest + Supertest + `ws` + **real PostgreSQL** | 4 | AI results stored and aggregated into the leaderboard; forged or invalid results rejected; two WebSocket clients matched, game played and saved by the server; duplicate name refused |
 | Component | **React Testing Library** + fake WebSocket | 5 | Name required, online game driven only by server-confirmed moves, forfeit and re-search, "name taken" error, AI turn hand-over |
@@ -159,7 +159,7 @@ cd e2e && npm ci && npx playwright install chromium && npx playwright test
 All data lives in one table (`matches`); the leaderboard is computed from it. Pick one:
 
 | Where | Command | What it does |
-|-------|---------|--------------|
+| ------- | --------- | -------------- |
 | GitHub (one click) | Actions → **Reset leaderboard (production)** → Run workflow → type `RESET` | SSHes to the VPS, runs the script below, verifies `/api/leaderboard` is `[]` |
 | On the server | `~/amoba/scripts/reset-db.sh` (asks for confirmation; `--yes` skips it) | `TRUNCATE matches RESTART IDENTITY` inside the running `db` container |
 | On the server, manually | `cd ~/amoba && docker compose exec db psql -U amoba -d amoba -c "TRUNCATE matches RESTART IDENTITY;"` | same as the script |
