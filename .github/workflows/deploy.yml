@@ -70,10 +70,12 @@ jobs:
       - run: npm run build
 
   # -------------------------------------------- 3. E2E against the real stack
+  # Runs on a native ARM64 runner (free for public repos), the same CPU
+  # architecture as the Oracle VPS, so the arm64 images are what get tested.
   e2e:
-    name: E2E – Playwright vs docker compose
+    name: E2E – Playwright vs docker compose (ARM64)
     needs: [backend-tests, frontend-tests]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
       - name: Start the 3-container stack (same compose file as production)

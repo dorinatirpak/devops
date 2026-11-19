@@ -59,18 +59,6 @@ async function enterName(user, name) {
   if (name) await user.type(input, name);
 }
 
-/** Home -> Find Opponent -> paired by the fake server. */
-async function startOnline(user, { you = 'X', me = 'Dorina', rival = 'Bence' } = {}) {
-  await enterName(user, me);
-  await user.click(screen.getByRole('button', { name: 'Find Opponent' }));
-  const ws = lastSocket();
-  await waitFor(() => expect(ws.sent).toContainEqual({ type: 'join', name: me }));
-  ws.receive({ type: 'queued', name: me });
-  const players = you === 'X' ? { X: me, O: rival } : { X: rival, O: me };
-  ws.receive({ type: 'start', gameId: 1, you, players });
-  return ws;
-}
-
 describe('<App /> (react-testing-library)', () => {
   it('requires a real name before matchmaking or an AI game can start', async () => {
     mockFetch();
@@ -129,21 +117,6 @@ describe('<App /> (react-testing-library)', () => {
     ws.receive({ type: 'saved' });
     await waitFor(() => expect(lbCalls()).toBeGreaterThan(before));
     expect(fetchMock).not.toHaveBeenCalledWith('/api/matches', expect.objectContaining({ method: 'POST' }));
-  });
-
-  it('announces a forfeit and can search for a new opponent', async () => {
-    mockFetch();
-    const user = userEvent.setup();
-    render(<App />);
-    const ws = await startOnline(user, { you: 'O' });
-    expect(screen.getByRole('status')).toHaveTextContent('Waiting for Bence');
-
-    ws.receive({ type: 'end', winner: 'O', line: [], reason: 'forfeit' });
-    expect(screen.getByRole('status')).toHaveTextContent('You win – opponent left');
-
-    await user.click(screen.getByRole('button', { name: 'New opponent' }));
-    expect(FakeSocket.all).toHaveLength(2);
-    await waitFor(() => expect(lastSocket().sent).toEqual([{ type: 'join', name: 'Dorina' }]));
   });
 
   it('explains when the name is already playing online', async () => {

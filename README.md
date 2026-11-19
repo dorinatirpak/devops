@@ -54,6 +54,8 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
   without ARM emulation: the `npm ci` / `vite build` stages run on the CI machine's own architecture
   (`FROM --platform=$BUILDPLATFORM`), which is safe because the dependencies are pure JavaScript and
   the frontend output is static files. The arm64 runtime stages contain only `COPY`.
+  The E2E job runs on GitHub's native ARM64 runner (`ubuntu-24.04-arm`, free for public repos), so
+  the end-to-end tests exercise the same CPU architecture as the production server.
 * **Two compose files:** `docker-compose.yml` names the images (used everywhere).
   `docker-compose.override.yml` adds `build:` and is loaded automatically in a git checkout, so
   locally and in CI the same `docker compose up` builds from source. The server never receives the
@@ -80,7 +82,7 @@ No firewall change is needed: 8090 is only reached by NPM on the same machine.
 push to main
    ├─► backend-tests   (unit + integration against a Postgres service container)
    ├─► frontend-tests  (unit + React Testing Library, then `vite build`)
-   └─► e2e             (docker compose up the real 3-tier stack → Playwright/Chromium)
+   └─► e2e             (ARM64 runner: docker compose up the real 3-tier stack → Playwright/Chromium)
           └─► publish  (continuous delivery; only on main, only if everything above is green)
                  buildx → amd64 + arm64 images → Docker Hub, tags :<commit sha> and :latest
                  └─► deploy   (continuous deployment)
@@ -122,15 +124,26 @@ ssh-keyscan devops-ora.tech | gh secret set SSH_KNOWN_HOSTS
 
 ## 4. Testing strategy
 
-Few tests, each guarding something that would really break: game rules, matchmaking, the
-security rules that stop forged results, and the full deployment path. No tests for trivial UI details.
+The suite follows the **Testing Pyramid**: many fast, cheap tests at the bottom, few slow,
+expensive ones at the top. Each rule is tested at the lowest level that can see it; higher levels
+only check what lower ones cannot (that the pieces work together). No tests for trivial UI details.
+
+```
+            ▲  E2E (2)          full stack in a real browser · minutes · CI only
+           ▲▲▲  Integration (3)  Express + real PostgreSQL + WebSocket · seconds
+          ▲▲▲▲  Component (4)    React UI + fake server · ~1 s each
+       ▲▲▲▲▲▲▲  Unit (7)         pure game and lobby logic · milliseconds
+```
 
 | Level | Tool | Tests | What they protect |
 | ------- | ------ | ------: | ------------------- |
 | Unit | Vitest | 7 | Win detection edge cases (four is not enough, no wrap-around, draw), AI wins before blocking; lobby pairing, one seat per name (no self-play), server-side turn rules, server-decided wins, forfeits |
-| Integration | Vitest + Supertest + `ws` + **real PostgreSQL** | 4 | AI results stored and aggregated into the leaderboard; forged or invalid results rejected; two WebSocket clients matched, game played and saved by the server; duplicate name refused |
-| Component | **React Testing Library** + fake WebSocket | 5 | Name required, online game driven only by server-confirmed moves, forfeit and re-search, "name taken" error, AI turn hand-over |
-| E2E | **Playwright** (Chromium) on the real compose stack | 4 | Health through nginx to the DB, two separate browsers play a full match, same name cannot join twice, AI game |
+| Component | **React Testing Library** + fake WebSocket | 4 | Name required, online game driven only by server-confirmed moves, "name taken" error, AI turn hand-over |
+| Integration | Vitest + Supertest + `ws` + **real PostgreSQL** | 3 | AI results stored and aggregated into the leaderboard; forged or invalid results rejected; two WebSocket clients matched, game played and saved by the server |
+| E2E | **Playwright** (Chromium) on the real compose stack, ARM64 runner | 2 | Two separate browsers play a full online match; AI game |
+
+The deploy job adds a final smoke test (`/api/health` and the frontend on the server) after every
+release, so the live system is checked too.
 
 Why Playwright over Cypress: first-class headless Chromium in GitHub Actions
 (`npx playwright install --with-deps`), official linux-arm64 builds (so the same suite can also run

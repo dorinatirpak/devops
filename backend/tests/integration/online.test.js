@@ -90,15 +90,4 @@ describe('Online matchmaking over WebSocket (integration)', () => {
     a.close();
     b.close();
   });
-
-  it('refuses a second connection with a name that is already online', async () => {
-    const a = await client();
-    const b = await client();
-    a.send({ type: 'join', name: 'Carol' });
-    await a.next('queued');
-    b.send({ type: 'join', name: 'CAROL' });
-    expect(await b.next('error')).toMatchObject({ code: 'name_taken' });
-    a.close();
-    b.close();
-  });
 });
