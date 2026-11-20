@@ -7,11 +7,12 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import WebSocket from 'ws';
 import { createApp } from '../../src/app.js';
-import { createPool, migrate, insertMatch } from '../../src/db.js';
+import { insertMatch } from '../../src/db.js';
+import { createTestPool, prepareTestDb } from './testDb.js';
 import { Lobby } from '../../src/lobby.js';
 import { attachLobby, WS_PATH } from '../../src/ws.js';
 
-const pool = createPool(process.env.DATABASE_URL || 'postgres://amoba:amoba@localhost:5432/amoba_test');
+const pool = createTestPool();
 const lobby = new Lobby({ onFinish: (m) => insertMatch(pool, m), random: () => 0 });
 const app = createApp({ pool, lobby, version: 'test' });
 let server;
@@ -19,7 +20,7 @@ let wss;
 let url;
 
 beforeAll(async () => {
-  await migrate(pool);
+  await prepareTestDb(pool);
   server = app.listen(0);
   ({ wss } = attachLobby(server, { pool, lobby }));
   url = `ws://127.0.0.1:${server.address().port}${WS_PATH}`;
@@ -28,9 +29,10 @@ beforeEach(async () => {
   await pool.query('TRUNCATE matches RESTART IDENTITY');
 });
 afterAll(async () => {
-  for (const ws of wss.clients) ws.terminate();
-  wss.close();
-  await new Promise((r) => server.close(r));
+  // Guarded: if the database was unreachable, the server was never started.
+  for (const ws of wss?.clients ?? []) ws.terminate();
+  wss?.close();
+  if (server) await new Promise((r) => server.close(r));
   await pool.end();
 });
 

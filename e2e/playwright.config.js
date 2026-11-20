@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // Default: the local stack. Override with BASE_URL=https://amoba.devops-ora.tech to test production.
 export default defineConfig({
   testDir: './tests',
+  globalSetup: './global-setup.js', // checks the app is up before running anything
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   // One worker: online tests share a single matchmaking queue, so parallel
