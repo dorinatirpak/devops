@@ -155,7 +155,7 @@ on the VPS: `BASE_URL=https://amoba.devops-ora.tech npx playwright test`), auto-
 What each command needs, from the bottom of the pyramid up:
 
 | Command | Needs | Notes |
-|---------|-------|-------|
+| --------- | ------- | ------- |
 | `cd backend; npm test` | nothing | unit tests only (milliseconds) |
 | `cd frontend; npm test` | nothing | unit + React Testing Library |
 | `cd backend; npm run test:integration` | a throwaway PostgreSQL | see below |
