@@ -128,7 +128,7 @@ The suite follows the **Testing Pyramid**: many fast, cheap tests at the bottom,
 expensive ones at the top. Each rule is tested at the lowest level that can see it; higher levels
 only check what lower ones cannot (that the pieces work together). No tests for trivial UI details.
 
-```
+```text
             ▲  E2E (2)          full stack in a real browser · minutes · CI only
            ▲▲▲  Integration (3)  Express + real PostgreSQL + WebSocket · seconds
           ▲▲▲▲  Component (4)    React UI + fake server · ~1 s each
@@ -152,20 +152,37 @@ on the VPS: `BASE_URL=https://amoba.devops-ora.tech npx playwright test`), auto-
 
 ## 5. Running locally
 
-```bash
-# Unit + component tests (no Docker needed)
-cd backend && npm ci && npm run test:unit
-cd frontend && npm ci && npm test
+What each command needs, from the bottom of the pyramid up:
 
-# Integration tests (needs Postgres)
-docker run --rm -d --name amoba-pg -p 5432:5432 -e POSTGRES_USER=amoba -e POSTGRES_PASSWORD=amoba -e POSTGRES_DB=amoba_test postgres:16-alpine
-cd backend && npm run test:integration
+| Command | Needs | Notes |
+|---------|-------|-------|
+| `cd backend; npm test` | nothing | unit tests only (milliseconds) |
+| `cd frontend; npm test` | nothing | unit + React Testing Library |
+| `cd backend; npm run test:integration` | a throwaway PostgreSQL | see below |
+| `cd e2e; npm test` | the whole stack running (Docker) | see below |
 
-# Whole stack + E2E
-cp .env.example .env
+If a dependency is missing, the integration and E2E suites stop with one message that says what to
+start. No Docker on your machine? That's fine: CI runs every level on every push and pull request.
+
+```powershell
+# Integration tests: a throwaway Postgres on port 5433 (5432 is often taken by a local PostgreSQL install)
+docker run --rm -d --name amoba-pg -p 5433:5432 -e POSTGRES_USER=amoba -e POSTGRES_PASSWORD=amoba -e POSTGRES_DB=amoba_test postgres:16-alpine
+cd backend
+$env:DATABASE_URL = "postgres://amoba:amoba@localhost:5433/amoba_test"
+npm run test:integration
+docker stop amoba-pg
+
+# E2E: start the real 3-tier stack, then run Playwright
+copy .env.example .env
 docker compose up -d --build --wait
-cd e2e && npm ci && npx playwright install chromium && npx playwright test
+cd e2e
+npm ci
+npx playwright install chromium
+npm test
 ```
+
+The E2E suite can also target another deployment: `$env:BASE_URL = "https://..."; npm test`.
+Avoid pointing it at production: the online test plays real matches that land on the leaderboard.
 
 ## 6. Resetting the database (leaderboard / match history)
 

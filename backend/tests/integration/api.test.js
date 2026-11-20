@@ -1,20 +1,18 @@
 /**
  * Integration tests: real Express app + real PostgreSQL (no mocks).
- * Locally:  docker run --rm -d -p 5432:5432 -e POSTGRES_USER=amoba -e POSTGRES_PASSWORD=amoba -e POSTGRES_DB=amoba_test postgres:16-alpine
+ * Locally:  see testDb.js / README ("Running locally"); `npm run test:integration`.
  * In CI:    a Postgres "service container" provides the database.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
-import { createPool, migrate } from '../../src/db.js';
+import { createTestPool, prepareTestDb } from './testDb.js';
 
-const pool = createPool(
-  process.env.DATABASE_URL || 'postgres://amoba:amoba@localhost:5432/amoba_test',
-);
+const pool = createTestPool();
 const app = createApp({ pool, version: 'test' });
 
 beforeAll(async () => {
-  await migrate(pool);
+  await prepareTestDb(pool);
 });
 beforeEach(async () => {
   await pool.query('TRUNCATE matches RESTART IDENTITY');
