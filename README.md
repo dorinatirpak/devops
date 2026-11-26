@@ -145,6 +145,30 @@ only check what lower ones cannot (that the pieces work together). No tests for 
 The deploy job adds a final smoke test (`/api/health` and the frontend on the server) after every
 release, so the live system is checked too.
 
+### Every test, one by one
+
+Each test file starts with a header (type, what it tests, what is faked, what it needs, how to run
+it), and every test has a numbered list of what it checks, with matching numbers in the code.
+
+| # | Level | File | Test | What it proves |
+|--:|-------|------|------|----------------|
+| 1 | Unit | `frontend/src/game/logic.test.js` | only a real line of five wins; a full board without one is a draw | Win detection incl. edge cases (4 is not enough, no wrap-around to the next row), draw detection |
+| 2 | Unit | `frontend/src/game/logic.test.js` | the AI takes its own win first, otherwise blocks an open four | The AI's priorities: win > block |
+| 3 | Unit | `backend/tests/unit/lobby.test.js` | queues the first player and pairs them with the next one | Matchmaking: queue, pairing, X/O assignment |
+| 4 | Unit | `backend/tests/unit/lobby.test.js` | gives one seat per name, so nobody can play against themselves | **Security:** no duplicate or generic names, no self-play |
+| 5 | Unit | `backend/tests/unit/lobby.test.js` | rejects moves out of turn, on taken cells and off the board | **Security:** the server validates every move |
+| 6 | Unit | `backend/tests/unit/lobby.test.js` | decides the winner on the server, records the match and frees both players | Server-side result, saving, state reset |
+| 7 | Unit | `backend/tests/unit/lobby.test.js` | counts leaving a running game as a loss, but not before the first move | Edge case: forfeits |
+| 8 | Component | `frontend/src/App.test.jsx` | requires a real name before matchmaking or an AI game can start | Input validation in the UI |
+| 9 | Component | `frontend/src/App.test.jsx` | matches you with a real opponent and plays the moves the server confirms | The whole online flow; the UI follows the server; the browser never saves online results |
+| 10 | Component | `frontend/src/App.test.jsx` | explains when the name is already playing online | The UI side of the one-seat-per-name rule |
+| 11 | Component | `frontend/src/App.test.jsx` | hands the turn to the AI visibly, then back to you | Turn hand-over with the deliberate AI delay |
+| 12 | Integration | `backend/tests/integration/api.test.js` | stores AI games and builds the leaderboard from them, merging names case-insensitively | REST API + SQL on a real PostgreSQL |
+| 13 | Integration | `backend/tests/integration/api.test.js` | rejects forged or invalid results and stores nothing | **Security:** forged results never reach the database |
+| 14 | Integration | `backend/tests/integration/online.test.js` | pairs two players, plays the game on the server and stores the result | WebSocket + Lobby + PostgreSQL together |
+| 15 | E2E | `e2e/tests/game.spec.js` | online: two separate browsers are matched and play through the server | Two real browsers play through every container |
+| 16 | E2E | `e2e/tests/game.spec.js` | PvE: the AI takes a visible turn and hands it back | An AI game on the real stack |
+
 Why Playwright over Cypress: first-class headless Chromium in GitHub Actions
 (`npx playwright install --with-deps`), official linux-arm64 builds (so the same suite can also run
 on the VPS: `BASE_URL=https://amoba.devops-ora.tech npx playwright test`), auto-waiting assertions
