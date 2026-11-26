@@ -1,3 +1,13 @@
+/**
+ * END-TO-END TESTS – Playwright (top of the Testing Pyramid: few, slow, valuable)
+ *
+ * A real Chromium browser uses the real app, started with docker compose:
+ * browser -> nginx (frontend container) -> Express (backend container)
+ * -> PostgreSQL (db container). Nothing is faked. In CI this runs on an
+ * ARM64 machine, the same CPU type as the production server.
+ * Only the two most important user journeys are tested here; the details are
+ * covered by the cheaper tests lower in the pyramid.
+ */
 import { test, expect } from '@playwright/test';
 
 // Unique names per run so tests never depend on leftover leaderboard data.
@@ -9,6 +19,12 @@ async function findOpponent(page, name) {
   await page.getByRole('button', { name: 'Find Opponent' }).click();
 }
 
+// WHAT: two separate browser sessions (two "people") enter different names,
+// press Find Opponent, get matched, and play a full game. Every move appears in
+// the other browser, both see the result, and the winner shows up on the
+// leaderboard and under Recent Matches.
+// WHY: this is the main feature, tested through every layer of the system,
+// including the WebSocket going through nginx.
 test('online: two separate browsers are matched and play through the server', async ({ browser }) => {
   // Two isolated browser contexts = two different people on two devices.
   const ctxA = await browser.newContext();
@@ -55,6 +71,10 @@ test('online: two separate browsers are matched and play through the server', as
   await ctxB.close();
 });
 
+// WHAT: a player starts a game against the Neon AI; after their move the status
+// shows the AI thinking, the AI places exactly one stone, and it is the
+// player's turn again.
+// WHY: the second way to play, checked in the real deployed setup.
 test('PvE: the AI takes a visible turn and hands it back', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Your name').fill(`Cid-${uid()}`);

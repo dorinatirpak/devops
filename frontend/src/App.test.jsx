@@ -1,3 +1,12 @@
+/**
+ * COMPONENT TESTS – React Testing Library (second level of the Testing Pyramid)
+ *
+ * The whole React app is rendered in a simulated browser (jsdom) and used the
+ * way a person would: typing, clicking, reading what is on screen.
+ * The backend is replaced by fakes: fetch() returns prepared answers, and
+ * FakeSocket lets the test act as the matchmaking server. So these tests check
+ * the UI's behaviour without needing Docker, a server or a database.
+ */
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -60,6 +69,10 @@ async function enterName(user, name) {
 }
 
 describe('<App /> (react-testing-library)', () => {
+  // WHAT: an empty name or a generic one ("Player X") shows an error message,
+  // and no connection to the matchmaking server is opened.
+  // WHY: names identify players on the leaderboard; this stops anonymous or
+  // merged entries already in the browser.
   it('requires a real name before matchmaking or an AI game can start', async () => {
     mockFetch();
     const user = userEvent.setup();
@@ -76,6 +89,12 @@ describe('<App /> (react-testing-library)', () => {
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
   });
 
+  // WHAT: the full online flow from the player's side: join the queue -> get paired
+  // -> "Your turn" -> click a cell -> the stone appears only after the SERVER
+  // confirms the move -> "Waiting for Bence" (board locked) -> the result is shown
+  // -> the leaderboard is refreshed.
+  // WHY (complex state changes): the screen must always follow the server, and the
+  // browser must never save an online result itself (no POST to /api/matches).
   it('matches you with a real opponent and plays the moves the server confirms', async () => {
     const fetchMock = mockFetch();
     const user = userEvent.setup();
@@ -119,6 +138,9 @@ describe('<App /> (react-testing-library)', () => {
     expect(fetchMock).not.toHaveBeenCalledWith('/api/matches', expect.objectContaining({ method: 'POST' }));
   });
 
+  // WHAT: when the server answers "name taken", the player sees a clear message
+  // and can go back with their name still filled in.
+  // WHY: this is the UI side of the "one seat per name" security rule.
   it('explains when the name is already playing online', async () => {
     mockFetch();
     const user = userEvent.setup();
@@ -132,6 +154,10 @@ describe('<App /> (react-testing-library)', () => {
     expect(screen.getByLabelText('Your name')).toHaveValue('Dorina');
   });
 
+  // WHAT: after your move, the status shows "Neon AI is thinking", the board is
+  // locked, then the AI's stone appears (with a ring) and it is your turn again.
+  // WHY: the AI answers instantly, so the app deliberately waits ~0.9 s. This test
+  // guards the smooth turn hand-over that the user asked for.
   it('hands the turn to the AI visibly, then back to you', async () => {
     mockFetch();
     const user = userEvent.setup();

@@ -65,6 +65,10 @@ async function client() {
 }
 
 describe('Online matchmaking over WebSocket (integration)', () => {
+  // WHAT: two real WebSocket clients connect to a real server, get matched, play a
+  // game to five in a row, and the server writes the result to PostgreSQL.
+  // WHY: the unit tests check the Lobby on its own; this proves that the network
+  // layer (WebSocket), the Lobby and the database work together.
   it('pairs two players, plays the game on the server and stores the result', async () => {
     const a = await client();
     const b = await client();

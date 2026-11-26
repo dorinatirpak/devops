@@ -1,3 +1,10 @@
+/**
+ * UNIT TESTS – game rules (bottom of the Testing Pyramid)
+ *
+ * Pure functions, no browser, no server, no database: they run in milliseconds.
+ * The same win-detection rules also run on the server (backend/src/game.js),
+ * so if these are wrong, every game in the app is wrong.
+ */
 import { describe, it, expect } from 'vitest';
 import { SIZE, createBoard, checkWinner, isDraw, chooseAiMove } from './logic';
 
@@ -8,6 +15,11 @@ const place = (cells, player, board = createBoard()) => {
 };
 
 describe('game rules (unit)', () => {
+  // WHAT: checkWinner() finds 5 in a row (horizontal and diagonal), and isDraw()
+  // only reports a draw for a full board with no winner.
+  // EDGE CASES: 4 in a row is NOT a win, and cells that are next to each other in
+  // the array but wrap onto the next row of the board do NOT form a line.
+  // WHY: this is the core rule of the game. A bug here means wrong winners.
   it('only a real line of five wins; a full board without one is a draw', () => {
     const row = place([[7, 3], [7, 4], [7, 5], [7, 6], [7, 7]], 'X');
     expect(checkWinner(row)).toEqual({ winner: 'X', line: [at(7, 3), at(7, 4), at(7, 5), at(7, 6), at(7, 7)] });
@@ -23,6 +35,10 @@ describe('game rules (unit)', () => {
     expect(isDraw(row)).toBe(false);
   });
 
+  // WHAT: the Neon AI (chooseAiMove) completes its own five when it can, and
+  // otherwise blocks the human's open four.
+  // WHY: the order matters: winning beats defending. Without this the AI would be
+  // trivially easy to beat, or miss a guaranteed win.
   it('the AI takes its own win first, otherwise blocks an open four', () => {
     const both = place([[3, 3], [3, 4], [3, 5], [3, 6]], 'O');
     place([[9, 3], [9, 4], [9, 5], [9, 6]], 'X', both);

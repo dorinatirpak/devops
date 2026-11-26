@@ -22,6 +22,10 @@ afterAll(async () => {
 });
 
 describe('Amoba API + PostgreSQL (integration)', () => {
+  // WHAT: results saved through the REST API really end up in PostgreSQL, and the
+  // leaderboard (an SQL query) counts wins/losses/draws correctly, treating
+  // "Dorina" and "dorina" as the same player.
+  // WHY: unit tests cannot check SQL. Only a real database proves the queries work.
   it('stores AI games and builds the leaderboard from them, merging names case-insensitively', async () => {
     const post = (m) => request(app).post('/api/matches').send({ playerO: 'Neon AI', mode: 'pve', ...m });
     const created = await post({ playerX: 'Dorina', winner: 'X', moves: 9 });
@@ -37,6 +41,11 @@ describe('Amoba API + PostgreSQL (integration)', () => {
     ]);
   });
 
+  // WHAT: the API refuses fake results: an online (PvP) result sent by a browser,
+  // generic names, pretending to be the AI, impossible move counts or junk data.
+  // After all of them the database is still empty.
+  // WHY (security rule): only AI games may be reported by the browser; online
+  // results are written by the server, so nobody can invent wins.
   it('rejects forged or invalid results and stores nothing', async () => {
     const forged = [
       { playerX: 'Alice', playerO: 'Bob', mode: 'pvp', winner: 'X', moves: 9 }, // PvP is recorded by the server only
