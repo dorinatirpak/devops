@@ -7,25 +7,23 @@ import { fetchHealth } from './api';
 export const APP_NAME = 'Neon Requiem';
 export { AI_NAME } from './game/names';
 
-const NAME_KEY = 'neon-requiem:name';
-const loadName = () => {
+// Earlier versions saved the player's name in the browser. The name is no longer
+// stored anywhere on the device; this removes a name left over from those versions.
+const OLD_NAME_KEY = 'neon-requiem:name';
+const forgetOldName = () => {
   try {
-    return localStorage.getItem(NAME_KEY) || '';
+    localStorage.removeItem(OLD_NAME_KEY);
   } catch {
-    return '';
-  }
-};
-const storeName = (name) => {
-  try {
-    localStorage.setItem(NAME_KEY, name);
-  } catch {
-    /* private mode: just don't remember it */
+    /* storage unavailable (e.g. private mode): nothing to remove */
   }
 };
 
 export default function App() {
   const [screen, setScreen] = useState('home'); // 'home' | 'online' | 'ai'
-  const [name, setName] = useState(loadName);
+  // Kept only in memory: survives going Home within this visit, gone after a reload.
+  const [name, setName] = useState('');
+
+  useEffect(forgetOldName, []);
   const [round, setRound] = useState(0); // new key = fresh game / fresh search
   const [refreshKey, setRefreshKey] = useState(0);
   const [version, setVersion] = useState(null);
@@ -36,7 +34,6 @@ export default function App() {
 
   const play = (mode, playerName) => {
     setName(playerName);
-    storeName(playerName);
     setRound((r) => r + 1);
     setScreen(mode);
   };

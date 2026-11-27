@@ -161,7 +161,7 @@ it), and every test has a numbered list of what it checks, with matching numbers
 | 7 | Unit | `backend/tests/unit/lobby.test.js` | counts leaving a running game as a loss, but not before the first move | Edge case: forfeits |
 | 8 | Component | `frontend/src/App.test.jsx` | requires a real name before matchmaking or an AI game can start | Input validation in the UI |
 | 9 | Component | `frontend/src/App.test.jsx` | matches you with a real opponent and plays the moves the server confirms | The whole online flow; the UI follows the server; the browser never saves online results |
-| 10 | Component | `frontend/src/App.test.jsx` | explains when the name is already playing online | The UI side of the one-seat-per-name rule |
+| 10 | Component | `frontend/src/App.test.jsx` | explains when the name is already playing online, without storing the name | The UI side of the one-seat-per-name rule; **privacy:** the name is never saved on the device |
 | 11 | Component | `frontend/src/App.test.jsx` | hands the turn to the AI visibly, then back to you | Turn hand-over with the deliberate AI delay |
 | 12 | Integration | `backend/tests/integration/api.test.js` | stores AI games and builds the leaderboard from them, merging names case-insensitively | REST API + SQL on a real PostgreSQL |
 | 13 | Integration | `backend/tests/integration/api.test.js` | rejects forged or invalid results and stores nothing | **Security:** forged results never reach the database |

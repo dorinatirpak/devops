@@ -69,7 +69,7 @@ class FakeSocket {
 const lastSocket = () => FakeSocket.all.at(-1);
 
 // Every test starts clean: no sockets, the fake WebSocket installed,
-// and afterwards the fakes and the remembered name are removed.
+// and afterwards the fakes and any browser storage are removed.
 beforeEach(() => {
   FakeSocket.all = [];
   vi.stubGlobal('WebSocket', FakeSocket);
@@ -181,16 +181,21 @@ describe('<App /> (react-testing-library)', () => {
   });
 
   // --------------------------------------------------------------------------
-  // TEST 3 – "Name taken" error (the UI side of a security rule)
+  // TEST 3 – "Name taken" error and name privacy
   // Checks:
   //   1. when the server refuses the name, the message is shown as an alert
   //   2. "Back" returns to the home screen with the name still filled in,
-  //      so the player only has to change it
+  //      so the player only has to change it (kept in memory for this visit)
+  //   3. the name is NOT saved on the device, so after a reload (or for the
+  //      next person on a shared computer) the field starts empty; a name left
+  //      over from older versions of the app is deleted
+  //   4. a fresh page load starts with an empty name field
   // --------------------------------------------------------------------------
-  it('explains when the name is already playing online', async () => {
+  it('explains when the name is already playing online, without storing the name', async () => {
     mockFetch();
+    localStorage.setItem('neon-requiem:name', 'Old Name'); // left over from an older version
     const user = userEvent.setup();
-    render(<App />);
+    const { unmount } = render(<App />);
     await enterName(user, 'Dorina');
     await user.click(screen.getByRole('button', { name: 'Find Opponent' }));
     // Server: someone called Dorina is already online.
@@ -199,6 +204,12 @@ describe('<App /> (react-testing-library)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByLabelText('Your name')).toHaveValue('Dorina'); // 2.
+
+    expect(localStorage.length).toBe(0); // 3. nothing stored, the old name is gone
+
+    unmount(); // 4. "reload": open the app again from scratch
+    render(<App />);
+    expect(screen.getByLabelText('Your name')).toHaveValue('');
   });
 
   // --------------------------------------------------------------------------
