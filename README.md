@@ -151,7 +151,7 @@ Each test file starts with a header (type, what it tests, what is faked, what it
 it), and every test has a numbered list of what it checks, with matching numbers in the code.
 
 | # | Level | File | Test | What it proves |
-|--:|-------|------|------|----------------|
+| --: | ------- | ------ | ------ | ---------------- |
 | 1 | Unit | `frontend/src/game/logic.test.js` | only a real line of five wins; a full board without one is a draw | Win detection incl. edge cases (4 is not enough, no wrap-around to the next row), draw detection |
 | 2 | Unit | `frontend/src/game/logic.test.js` | the AI takes its own win first, otherwise blocks an open four | The AI's priorities: win > block |
 | 3 | Unit | `backend/tests/unit/lobby.test.js` | queues the first player and pairs them with the next one | Matchmaking: queue, pairing, X/O assignment |
