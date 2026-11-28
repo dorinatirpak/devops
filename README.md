@@ -25,11 +25,11 @@ University DevOps project: the focus is the **testing → CI/CD → Docker deplo
                               amoba.devops-ora.tech  →  <host>:8090
                                           │
  ┌──────────────────────── docker compose project "amoba" ─────────────────────────┐
- │                                                                                  │
- │  frontend (nginx :80) ── /api/* ──►  backend (Express :4000) ──►  db (Postgres)  │
- │     static React files  ── /api/ws ─►  + WebSocket lobby      "data" network      │
- │                          "web" network                        (internal)         │
- └──────────────────────────────────────────────────────────────────────────────────┘
+ │                                                                                 │
+ │  frontend (nginx :80) ── /api/* ──►  backend (Express :4000) ──►  db (Postgres) │
+ │     static React files  ── /api/ws ─►  + WebSocket lobby      "data" network    │
+ │                          "web" network                        (internal)        │
+ └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 * **Container-to-container traffic** uses Docker's embedded DNS: the frontend's nginx proxies
@@ -225,9 +225,6 @@ Containers keep running for the first three options, so the site never goes down
 
 To inspect the data: `cd ~/amoba && docker compose exec db psql -U amoba -d amoba -c "SELECT * FROM matches ORDER BY id DESC LIMIT 10;"`
 
-## 7. Presentation checklist (Dec 9)
-
-0. The day before: run **Reset leaderboard** so the demo starts with a clean board.
 1. Show `docker compose ps` on the server: 3 healthy containers, DB without a host port.
 2. Make a small visible change, `git push`.
 3. Show the Actions run: test jobs → E2E → publish → deploy; open the Playwright HTML report artifact.
