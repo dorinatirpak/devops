@@ -131,8 +131,8 @@ only check what lower ones cannot (that the pieces work together). No tests for 
 ```text
             ▲  E2E (2)          full stack in a real browser · minutes · CI only
            ▲▲▲  Integration (3)  Express + real PostgreSQL + WebSocket · seconds
-          ▲▲▲▲  Component (4)    React UI + fake server · ~1 s each
-       ▲▲▲▲▲▲▲  Unit (7)         pure game and lobby logic · milliseconds
+          ▲▲ ▲▲  Component (4)    React UI + fake server · ~1 s each
+         ▲▲▲▲▲▲▲  Unit (7)         pure game and lobby logic · milliseconds
 ```
 
 | Level | Tool | Tests | What they protect |
@@ -225,11 +225,4 @@ Containers keep running for the first three options, so the site never goes down
 
 To inspect the data: `cd ~/amoba && docker compose exec db psql -U amoba -d amoba -c "SELECT * FROM matches ORDER BY id DESC LIMIT 10;"`
 
-1. Show `docker compose ps` on the server: 3 healthy containers, DB without a host port.
-2. Make a small visible change, `git push`.
-3. Show the Actions run: test jobs → E2E → publish → deploy; open the Playwright HTML report artifact.
-   Then show Docker Hub: both repositories have a new tag equal to the commit SHA, for amd64 and arm64.
-4. Refresh `https://amoba.devops-ora.tech` — footer shows the new commit sha.
-5. Open the site on two devices (e.g. laptop + phone), enter two names, press **Find Opponent** on
-   both: they are paired and every move appears on the other screen. Show the leaderboard update.
-6. Play a quick game against the Neon AI.
+`docker compose ps` on the server: 3 healthy containers, DB without a host port.
